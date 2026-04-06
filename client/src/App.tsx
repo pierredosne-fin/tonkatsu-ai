@@ -1,0 +1,88 @@
+import { useState, useEffect } from 'react';
+import { useSocket } from './hooks/useSocket';
+import { useAgentStore } from './store/agentStore';
+import { useTemplateStore } from './store/templateStore';
+import { HUD } from './components/HUD';
+import { TeamTabs } from './components/TeamTabs';
+import { OfficeMap } from './components/OfficeMap';
+import { AgentSidebar } from './components/AgentSidebar';
+import { CreateAgentModal } from './components/CreateAgentModal';
+import { ChatModal } from './components/ChatModal';
+import { ToastStack } from './components/ToastStack';
+import { TemplatesPanel } from './components/TemplatesPanel';
+
+export default function App() {
+  const { connected } = useSocket();
+  const currentTeamId = useAgentStore((s) => s.currentTeamId);
+  const setCurrentTeam = useAgentStore((s) => s.setCurrentTeam);
+  const [showCreate, setShowCreate] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [chatAgentId, setChatAgentId] = useState<string | null>(null);
+
+  useEffect(() => {
+    useTemplateStore.getState().fetchAll();
+  }, []);
+
+  const handleCreate = async (
+    name: string,
+    mission: string,
+    avatarColor: string,
+    workspacePath?: string,
+    teamId?: string
+  ) => {
+    const res = await fetch('/api/agents', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, mission, avatarColor, workspacePath, teamId }),
+    });
+    if (res.ok) {
+      setShowCreate(false);
+    } else {
+      const err = await res.json();
+      alert(err.error ?? 'Failed to create agent');
+    }
+  };
+
+  const handleDelete = async (agentId: string) => {
+    await fetch(`/api/agents/${agentId}`, { method: 'DELETE' });
+  };
+
+  const handleCreateTeam = (teamId: string) => {
+    setCurrentTeam(teamId);
+    setShowCreate(true);
+  };
+
+  const handleDeleteTeam = async (teamId: string) => {
+    await fetch(`/api/teams/${teamId}`, { method: 'DELETE' });
+  };
+
+  return (
+    <div className="app">
+      <HUD onAddAgent={() => setShowCreate(true)} onOpenTemplates={() => setShowTemplates(true)} connected={connected} />
+      <TeamTabs onCreateTeam={handleCreateTeam} onDeleteTeam={handleDeleteTeam} onOpenTemplates={() => setShowTemplates(true)} />
+      <div className="main">
+        <OfficeMap onAgentClick={(id) => setChatAgentId(id)} />
+        <AgentSidebar onAgentClick={(id) => setChatAgentId(id)} />
+      </div>
+
+      {showCreate && (
+        <CreateAgentModal
+          onClose={() => setShowCreate(false)}
+          onCreate={handleCreate}
+          teamId={currentTeamId ?? undefined}
+        />
+      )}
+
+      {chatAgentId && (
+        <ChatModal
+          agentId={chatAgentId}
+          onClose={() => setChatAgentId(null)}
+          onDelete={handleDelete}
+        />
+      )}
+
+      <ToastStack />
+      {showTemplates && <TemplatesPanel onClose={() => setShowTemplates(false)} />}
+    </div>
+  );
+}

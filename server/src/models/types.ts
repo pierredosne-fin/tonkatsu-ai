@@ -1,0 +1,66 @@
+export type AgentStatus = 'sleeping' | 'working' | 'pending' | 'delegating';
+
+export interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface Team {
+  id: string;
+  name: string;
+}
+
+export interface Agent {
+  id: string;
+  name: string;
+  mission: string;
+  avatarColor: string;
+  status: AgentStatus;
+  roomId: string;
+  teamId: string;
+  workspacePath: string;
+  worktreeOf?: string; // original repo path when this workspace is a git worktree
+  conversationHistory: Message[];
+  pendingQuestion?: string;
+  lastActivity: Date;
+  createdAt: Date;
+}
+
+export interface Room {
+  id: string;
+  agentId: string | null;
+  gridCol: number; // 1-3
+  gridRow: number; // 1-3
+}
+
+export interface AgentTemplate {
+  id: string;
+  name: string;
+  mission: string;
+  avatarColor: string;
+  createdAt: string;
+}
+
+export interface TeamTemplate {
+  id: string;
+  name: string;
+  agentTemplateIds: string[];
+  createdAt: string;
+}
+
+export interface AgentStatusUpdate {
+  agentId: string;
+  status: AgentStatus;
+  pendingQuestion?: string;
+}
+
+export interface AgentStreamChunk {
+  agentId: string;
+  chunk: string;
+  done: boolean;
+}
+
+export interface UserInputPayload {
+  agentId: string;
+  message: string;
+}

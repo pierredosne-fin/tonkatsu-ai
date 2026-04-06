@@ -1,0 +1,21 @@
+{
+  "agentTemplates": [
+    {
+      "id": "517f724b-f806-4b82-9d2f-80bdfc206b50",
+      "name": "CEO",
+      "mission": "Lead Finary as a 1B company",
+      "avatarColor": "#10b981",
+      "createdAt": "2026-04-06T09:50:50.196Z"
+    }
+  ],
+  "teamTemplates": [
+    {
+      "id": "ac1869c0-f5c6-494e-a661-35afa5626beb",
+      "name": "Finary Core",
+      "agentTemplateIds": [
+        "517f724b-f806-4b82-9d2f-80bdfc206b50"
+      ],
+      "createdAt": "2026-04-06T09:51:02.190Z"
+    }
+  ]
+}
