@@ -18,6 +18,8 @@ export default function App() {
   const [showCreate, setShowCreate] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [chatAgentId, setChatAgentId] = useState<string | null>(null);
+  const [editAgentId, setEditAgentId] = useState<string | null>(null);
+  const agents = useAgentStore((s) => s.agents);
 
   useEffect(() => {
     useTemplateStore.getState().fetchAll();
@@ -47,6 +49,20 @@ export default function App() {
     await fetch(`/api/agents/${agentId}`, { method: 'DELETE' });
   };
 
+  const handleEdit = async (agentId: string, name: string, mission: string, avatarColor: string, canCreateAgents: boolean) => {
+    const res = await fetch(`/api/agents/${agentId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, mission, avatarColor, canCreateAgents }),
+    });
+    if (res.ok) {
+      setEditAgentId(null);
+    } else {
+      const err = await res.json();
+      alert(err.error ?? 'Failed to update agent');
+    }
+  };
+
   const handleCreateTeam = (teamId: string) => {
     setCurrentTeam(teamId);
     setShowCreate(true);
@@ -61,7 +77,10 @@ export default function App() {
       <HUD onAddAgent={() => setShowCreate(true)} onOpenTemplates={() => setShowTemplates(true)} connected={connected} />
       <TeamTabs onCreateTeam={handleCreateTeam} onDeleteTeam={handleDeleteTeam} onOpenTemplates={() => setShowTemplates(true)} />
       <div className="main">
-        <OfficeMap onAgentClick={(id) => setChatAgentId(id)} />
+        <OfficeMap
+          onAgentClick={(id) => setChatAgentId(id)}
+          onEmptyRoomClick={() => setShowCreate(true)}
+        />
         <AgentSidebar onAgentClick={(id) => setChatAgentId(id)} />
       </div>
 
@@ -73,11 +92,24 @@ export default function App() {
         />
       )}
 
+      {editAgentId && (() => {
+        const agent = agents.find((a) => a.id === editAgentId);
+        return agent ? (
+          <CreateAgentModal
+            onClose={() => setEditAgentId(null)}
+            onCreate={handleCreate}
+            onEdit={handleEdit}
+            editAgent={agent}
+          />
+        ) : null;
+      })()}
+
       {chatAgentId && (
         <ChatModal
           agentId={chatAgentId}
           onClose={() => setChatAgentId(null)}
           onDelete={handleDelete}
+          onEdit={(id) => { setChatAgentId(null); setEditAgentId(id); }}
         />
       )}
 

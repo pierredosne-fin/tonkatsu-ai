@@ -1,22 +1,21 @@
 import { v4 as uuidv4 } from 'uuid';
 import { mkdirSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
+import { setCreateAgentsPermission } from './fileService.js';
 import type { Agent, AgentStatus, Message } from '../models/types.js';
 import { assignRoom, freeRoom, swapRooms } from './roomService.js';
 import { isGitRepo, createWorktree, removeWorktree } from './gitService.js';
 import {
+  getSessionMessages,
+  listSessions as sdkListSessions,
+  type SDKSessionInfo,
+} from '@anthropic-ai/claude-agent-sdk';
+import {
   saveAgents,
-  saveHistory,
-  loadHistory,
-  archiveHistory,
-  listSessions,
-  loadHistoryFromFile,
-  writeFullHistory,
   DEFAULT_TEAM,
   WORKSPACES_DIR,
   teamDisplayName,
   type PersistedAgent,
-  type ConversationSession,
 } from './persistenceService.js';
 
 const agents: Map<string, Agent> = new Map();
@@ -30,10 +29,8 @@ export function getAllAgents(): Agent[] {
   return Array.from(agents.values());
 }
 
-// Strip conversationHistory before sending to client
-export function toClientAgent(agent: Agent): Omit<Agent, 'conversationHistory'> {
-  const { conversationHistory: _, ...rest } = agent;
-  return rest;
+export function toClientAgent(agent: Agent): Agent {
+  return agent;
 }
 
 export function getAgent(id: string): Agent | undefined {
@@ -67,7 +64,6 @@ export function createAgent(params: {
 
   const slug = params.name.toLowerCase().replace(/\s+/g, '-');
   const teamDir = teamId === DEFAULT_TEAM ? WORKSPACES_DIR : join(WORKSPACES_DIR, teamId);
-  // If spawned from a template, nest workspace under <teamDir>/<templateSlug>/<agentSlug>
   const autoPath = params.templateSlug
     ? join(teamDir, params.templateSlug, slug)
     : join(teamDir, slug);
@@ -77,7 +73,6 @@ export function createAgent(params: {
   let worktreeOf: string | undefined;
 
   if (externalPath) {
-    // External workspace provided — create a git worktree if it's a git repo
     if (isGitRepo(externalPath)) {
       const branch = `agent/${slug}-${id.slice(0, 8)}`;
       if (createWorktree(externalPath, autoPath, branch)) {
@@ -85,7 +80,6 @@ export function createAgent(params: {
         worktreeOf = externalPath;
         console.log(`[git] Created worktree at ${autoPath} (branch: ${branch})`);
       } else {
-        // Worktree creation failed — fall back to using the external path directly
         workspacePath = externalPath;
         mkdirSync(workspacePath, { recursive: true });
       }
@@ -108,7 +102,7 @@ export function createAgent(params: {
     teamId,
     workspacePath,
     worktreeOf,
-    conversationHistory: [],
+    canCreateAgents: false,
     lastActivity: new Date(),
     createdAt: new Date(),
   };
@@ -135,12 +129,29 @@ export function restoreAgent(persisted: PersistedAgent): Agent | null {
     teamId,
     workspacePath: persisted.workspacePath,
     worktreeOf: persisted.worktreeOf,
-    conversationHistory: loadHistory(persisted.workspacePath),
+    sessionId: persisted.sessionId,
+    canCreateAgents: persisted.canCreateAgents ?? false,
     lastActivity: new Date(persisted.lastActivity),
     createdAt: new Date(persisted.createdAt),
   };
 
   agents.set(agent.id, agent);
+  // Ensure settings.json permission is in sync with persisted canCreateAgents flag
+  setCreateAgentsPermission(agent.workspacePath, agent.canCreateAgents ?? false);
+  return agent;
+}
+
+export function updateAgent(id: string, params: { name?: string; mission?: string; avatarColor?: string; canCreateAgents?: boolean }): Agent | null {
+  const agent = agents.get(id);
+  if (!agent) return null;
+  if (params.name !== undefined) agent.name = params.name;
+  if (params.mission !== undefined) agent.mission = params.mission;
+  if (params.avatarColor !== undefined) agent.avatarColor = params.avatarColor;
+  if (params.canCreateAgents !== undefined) {
+    agent.canCreateAgents = params.canCreateAgents;
+    setCreateAgentsPermission(agent.workspacePath, params.canCreateAgents);
+  }
+  persist();
   return agent;
 }
 
@@ -151,7 +162,6 @@ export function deleteAgent(id: string): boolean {
   freeRoom(id, agent.teamId);
   agents.delete(id);
   persist();
-  // Clean up git worktree if one was created for this agent
   if (agent.worktreeOf) {
     removeWorktree(agent.worktreeOf, agent.workspacePath);
   }
@@ -167,7 +177,6 @@ export function deleteTeam(teamId: string): string[] {
     agents.delete(agent.id);
     deletedIds.push(agent.id);
   }
-  // Remove team folder from disk
   const teamDir = join(WORKSPACES_DIR, teamId);
   if (existsSync(teamDir)) {
     try { rmSync(teamDir, { recursive: true, force: true }); } catch { /* ignore */ }
@@ -201,13 +210,6 @@ export function setStatus(id: string, status: AgentStatus, pendingQuestion?: str
   }
 }
 
-export function appendMessage(id: string, message: Message): void {
-  const agent = agents.get(id);
-  if (!agent) return;
-  agent.conversationHistory.push(message);
-  saveHistory(agent.workspacePath, message);
-}
-
 export function setAbortController(id: string, controller: AbortController): void {
   activeStreams.set(id, controller);
 }
@@ -224,30 +226,76 @@ export function clearAbortController(id: string): void {
   activeStreams.delete(id);
 }
 
+export function setSessionId(id: string, sessionId: string): void {
+  const agent = agents.get(id);
+  if (!agent) return;
+  agent.sessionId = sessionId;
+  persist();
+}
+
+export function clearSessionId(id: string): void {
+  const agent = agents.get(id);
+  if (!agent) return;
+  delete agent.sessionId;
+  persist();
+}
+
+// Fetch conversation history from SDK session storage for UI display
+export async function getHistory(agentId: string): Promise<Message[]> {
+  const agent = agents.get(agentId);
+  if (!agent?.sessionId) return [];
+  try {
+    const sdkMsgs = await getSessionMessages(agent.sessionId, { dir: agent.workspacePath });
+    const result: Message[] = [];
+    for (const sm of sdkMsgs) {
+      if (sm.type !== 'user' && sm.type !== 'assistant') continue;
+      const content = (sm.message as { content?: unknown }).content;
+      let text: string;
+      if (typeof content === 'string') {
+        text = content;
+      } else if (Array.isArray(content)) {
+        // Skip tool result messages (internal SDK plumbing, not user-visible)
+        if ((content as Array<{ type: string }>).some((b) => b.type === 'tool_result')) continue;
+        text = (content as Array<{ type: string; text?: string }>)
+          .filter((b) => b.type === 'text')
+          .map((b) => b.text ?? '')
+          .join('');
+      } else {
+        continue;
+      }
+      if (text.trim()) result.push({ role: sm.type as 'user' | 'assistant', content: text });
+    }
+    return result;
+  } catch (err) {
+    console.warn(`[agentService] Failed to load history for agent ${agentId}:`, err);
+    return [];
+  }
+}
+
+// List all SDK sessions for this agent's workspace
+export async function listAgentSessions(agentId: string): Promise<SDKSessionInfo[]> {
+  const agent = agents.get(agentId);
+  if (!agent) return [];
+  try {
+    return await sdkListSessions({ dir: agent.workspacePath });
+  } catch (err) {
+    console.warn(`[agentService] Failed to list sessions for agent ${agentId}:`, err);
+    return [];
+  }
+}
+
+// Switch to a specific SDK session
+export function setAgentSession(agentId: string, sessionId: string): void {
+  const agent = agents.get(agentId);
+  if (!agent) return;
+  agent.sessionId = sessionId;
+  persist();
+}
+
+// Start a new conversation — just clear the session ID; SDK creates a new session on next run
 export function newConversation(id: string): void {
   const agent = agents.get(id);
   if (!agent) return;
   abortStream(id);
-  archiveHistory(agent.workspacePath);
-  agent.conversationHistory = [];
-}
-
-export function getSessionList(id: string): ConversationSession[] {
-  const agent = agents.get(id);
-  if (!agent) return [];
-  return listSessions(agent.workspacePath);
-}
-
-export function resumeSession(id: string, file: string): Message[] | null {
-  const agent = agents.get(id);
-  if (!agent) return null;
-  const filePath = join(agent.workspacePath, file);
-  const history = loadHistoryFromFile(filePath);
-  // Archive current conversation if it has messages
-  if (agent.conversationHistory.length > 0) {
-    archiveHistory(agent.workspacePath);
-  }
-  writeFullHistory(agent.workspacePath, history);
-  agent.conversationHistory = [...history];
-  return history;
+  clearSessionId(id);
 }

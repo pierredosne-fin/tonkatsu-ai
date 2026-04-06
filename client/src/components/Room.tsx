@@ -5,6 +5,7 @@ interface Props {
   room: RoomType;
   agent?: Agent;
   onAgentClick: (agentId: string) => void;
+  onEmptyRoomClick?: () => void;
   isDragging?: boolean;
   isDropTarget?: boolean;
   onDragStart: () => void;
@@ -18,6 +19,7 @@ export function Room({
   room,
   agent,
   onAgentClick,
+  onEmptyRoomClick,
   isDragging,
   isDropTarget,
   onDragStart,
@@ -38,7 +40,8 @@ export function Room({
   return (
     <div
       className={classNames}
-      style={{ gridColumn: room.gridCol, gridRow: room.gridRow }}
+      style={{ gridColumn: room.gridCol, gridRow: room.gridRow, cursor: !agent && onEmptyRoomClick ? 'pointer' : undefined }}
+      onClick={!agent && onEmptyRoomClick ? onEmptyRoomClick : undefined}
       onDragOver={(e) => e.preventDefault()}
       onDragEnter={(e) => { e.preventDefault(); onDragEnter(); }}
       onDragLeave={onDragLeave}
@@ -58,7 +61,9 @@ export function Room({
             <AgentAvatar agent={agent} onClick={() => onAgentClick(agent.id)} />
           </div>
         ) : (
-          <span className="room-vacant-text">Vacant</span>
+          <span className="room-vacant-text">
+            {onEmptyRoomClick ? '+' : 'Vacant'}
+          </span>
         )}
       </div>
       {agent?.status === 'pending' && (

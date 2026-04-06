@@ -20,7 +20,8 @@ export interface Agent {
   teamId: string;
   workspacePath: string;
   worktreeOf?: string; // original repo path when this workspace is a git worktree
-  conversationHistory: Message[];
+  sessionId?: string;  // Claude Code Agent SDK session ID for conversation continuity
+  canCreateAgents?: boolean;
   pendingQuestion?: string;
   lastActivity: Date;
   createdAt: Date;
@@ -38,6 +39,10 @@ export interface AgentTemplate {
   name: string;
   mission: string;
   avatarColor: string;
+  description?: string;
+  tags?: string[];
+  isPublic?: boolean;
+  category?: string;
   createdAt: string;
 }
 
@@ -45,6 +50,10 @@ export interface TeamTemplate {
   id: string;
   name: string;
   agentTemplateIds: string[];
+  description?: string;
+  tags?: string[];
+  isPublic?: boolean;
+  category?: string;
   createdAt: string;
 }
 

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import * as agentService from '../services/agentService.js';
 import * as roomService from '../services/roomService.js';
+import * as fileService from '../services/fileService.js';
 import { runAgentTask } from '../services/claudeService.js';
 import type { Server } from 'socket.io';
 
@@ -61,12 +62,134 @@ export function createAgentRouter(io: Server) {
     }
     const { message } = req.body ?? {};
     if (message) {
-      const msg = { role: 'user' as const, content: message };
-      agentService.appendMessage(agent.id, msg);
-      io.emit('agent:message', { agentId: agent.id, message: msg });
+      io.emit('agent:message', { agentId: agent.id, message: { role: 'user', content: message } });
     }
-    setImmediate(() => runAgentTask(agent.id, io));
+    setImmediate(() => runAgentTask(agent.id, io, message ?? undefined));
     res.status(202).json({ agentId: agent.id, name: agent.name, teamId: agent.teamId });
+  });
+
+  const UpdateSchema = z.object({
+    name: z.string().min(1).max(50).optional(),
+    mission: z.string().min(1).max(1000).optional(),
+    avatarColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+    canCreateAgents: z.boolean().optional(),
+  });
+
+  router.patch('/:id', (req, res) => {
+    const result = UpdateSchema.safeParse(req.body);
+    if (!result.success) {
+      res.status(400).json({ error: result.error.flatten() });
+      return;
+    }
+    const updated = agentService.updateAgent(req.params.id, result.data);
+    if (!updated) {
+      res.status(404).json({ error: 'Agent not found' });
+      return;
+    }
+    io.emit('agent:updated', agentService.toClientAgent(updated));
+    res.json(agentService.toClientAgent(updated));
+  });
+
+  // ── Workspace Files ───────────────────────────────────────────────────────
+
+  router.get('/:id/files', (req, res) => {
+    const agent = agentService.getAgent(req.params.id);
+    if (!agent) { res.status(404).json({ error: 'Agent not found' }); return; }
+    res.json(fileService.readWorkspaceFiles(agent.workspacePath));
+  });
+
+  router.put('/:id/files/claude-md', (req, res) => {
+    const agent = agentService.getAgent(req.params.id);
+    if (!agent) { res.status(404).json({ error: 'Agent not found' }); return; }
+    const { content } = req.body;
+    if (typeof content !== 'string') { res.status(400).json({ error: 'content required' }); return; }
+    fileService.writeClaudeMd(agent.workspacePath, content);
+    res.json({ ok: true });
+  });
+
+  router.put('/:id/files/settings', (req, res) => {
+    const agent = agentService.getAgent(req.params.id);
+    if (!agent) { res.status(404).json({ error: 'Agent not found' }); return; }
+    const { content } = req.body;
+    if (typeof content !== 'string') { res.status(400).json({ error: 'content required' }); return; }
+    try {
+      fileService.writeSettings(agent.workspacePath, content);
+      res.json({ ok: true });
+    } catch {
+      res.status(400).json({ error: 'Invalid JSON' });
+    }
+  });
+
+  router.put('/:id/files/commands/:name(*)', (req, res) => {
+    const agent = agentService.getAgent(req.params.id);
+    if (!agent) { res.status(404).json({ error: 'Agent not found' }); return; }
+    const { content } = req.body;
+    if (typeof content !== 'string') { res.status(400).json({ error: 'content required' }); return; }
+    try {
+      fileService.writeCommand(agent.workspacePath, req.params.name, content);
+      res.json({ ok: true });
+    } catch (e: unknown) {
+      res.status(400).json({ error: e instanceof Error ? e.message : 'error' });
+    }
+  });
+
+  router.delete('/:id/files/commands/:name(*)', (req, res) => {
+    const agent = agentService.getAgent(req.params.id);
+    if (!agent) { res.status(404).json({ error: 'Agent not found' }); return; }
+    try {
+      fileService.deleteCommand(agent.workspacePath, req.params.name);
+      res.status(204).send();
+    } catch (e: unknown) {
+      res.status(400).json({ error: e instanceof Error ? e.message : 'error' });
+    }
+  });
+
+  router.put('/:id/files/rules/:name(*)', (req, res) => {
+    const agent = agentService.getAgent(req.params.id);
+    if (!agent) { res.status(404).json({ error: 'Agent not found' }); return; }
+    const { content } = req.body;
+    if (typeof content !== 'string') { res.status(400).json({ error: 'content required' }); return; }
+    try {
+      fileService.writeRule(agent.workspacePath, req.params.name, content);
+      res.json({ ok: true });
+    } catch (e: unknown) {
+      res.status(400).json({ error: e instanceof Error ? e.message : 'error' });
+    }
+  });
+
+  router.delete('/:id/files/rules/:name(*)', (req, res) => {
+    const agent = agentService.getAgent(req.params.id);
+    if (!agent) { res.status(404).json({ error: 'Agent not found' }); return; }
+    try {
+      fileService.deleteRule(agent.workspacePath, req.params.name);
+      res.status(204).send();
+    } catch (e: unknown) {
+      res.status(400).json({ error: e instanceof Error ? e.message : 'error' });
+    }
+  });
+
+  router.put('/:id/files/skills/:name', (req, res) => {
+    const agent = agentService.getAgent(req.params.id);
+    if (!agent) { res.status(404).json({ error: 'Agent not found' }); return; }
+    const { content } = req.body;
+    if (typeof content !== 'string') { res.status(400).json({ error: 'content required' }); return; }
+    try {
+      fileService.writeSkill(agent.workspacePath, req.params.name, content);
+      res.json({ ok: true });
+    } catch (e: unknown) {
+      res.status(400).json({ error: e instanceof Error ? e.message : 'error' });
+    }
+  });
+
+  router.delete('/:id/files/skills/:name', (req, res) => {
+    const agent = agentService.getAgent(req.params.id);
+    if (!agent) { res.status(404).json({ error: 'Agent not found' }); return; }
+    try {
+      fileService.deleteSkill(agent.workspacePath, req.params.name);
+      res.status(204).send();
+    } catch (e: unknown) {
+      res.status(400).json({ error: e instanceof Error ? e.message : 'error' });
+    }
   });
 
   router.delete('/:id', (req, res) => {

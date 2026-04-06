@@ -1,0 +1,212 @@
+version: 2
+
+models:
+
+  # ============================================================
+  # Phase 4 — User Retention Cohort Metrics
+  # ============================================================
+  - name: user_retention_cohort_metrics
+    description: >
+      D7, D30, D90 retention rates by weekly signup cohort and plan type.
+      One row per cohort_date x plan_type_at_signup.
+      Used by CEO dashboard for Activation Rate (D7) KPI.
+    tags: [retention, cohort, weekly_kpi]
+    columns:
+      - name: cohort_metric_id
+        description: Surrogate key (cohort_date + plan_type_at_signup)
+        tests:
+          - not_null
+          - unique
+      - name: cohort_date
+        description: Week-truncated date of user signup cohort
+        tests:
+          - not_null
+      - name: plan_type_at_signup
+        description: Plan type at the time of signup (free, premium, etc.)
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['free', 'premium', 'premium_plus', 'trial']
+      - name: cohort_size
+        description: Total users in the cohort
+        tests:
+          - not_null
+      - name: retention_rate_d7
+        description: Share of cohort who logged in at least once in days 1-7 post signup
+        tests:
+          - not_null
+      - name: retention_rate_d30
+        description: Share of cohort who logged in at least once in days 1-30 post signup
+        tests:
+          - not_null
+      - name: retention_rate_d90
+        description: Share of cohort who logged in at least once in days 1-90 post signup
+        tests:
+          - not_null
+
+  # ============================================================
+  # Phase 5 — Revenue Daily Metrics
+  # ============================================================
+  - name: revenue_daily_metrics
+    description: >
+      Daily revenue snapshot: MRR, ARPU, NRR, new MRR, churned MRR, expansion MRR.
+      One row per metric_date.
+      Powers CEO dashboard MRR + Net Revenue Retention KPI.
+    tags: [revenue, mrr, weekly_kpi]
+    columns:
+      - name: revenue_metric_id
+        description: Surrogate key (metric_date)
+        tests:
+          - not_null
+          - unique
+      - name: metric_date
+        description: Calendar date of the snapshot
+        tests:
+          - not_null
+      - name: active_subscribers
+        description: Number of users with an active paid subscription on that day
+        tests:
+          - not_null
+      - name: mrr_usd
+        description: Monthly Recurring Revenue in USD on that day
+        tests:
+          - not_null
+      - name: arpu_usd
+        description: Average Revenue Per User (MRR / active_subscribers)
+      - name: new_mrr_usd
+        description: MRR from first-time paying users who started that day
+        tests:
+          - not_null
+      - name: churned_mrr_usd
+        description: MRR lost from cancellations on that day
+        tests:
+          - not_null
+      - name: expansion_mrr_usd
+        description: MRR gained from plan upgrades on that day
+        tests:
+          - not_null
+      - name: contraction_mrr_usd
+        description: MRR lost from plan downgrades on that day
+        tests:
+          - not_null
+      - name: net_new_mrr_usd
+        description: Net MRR change (new + expansion - churn - contraction)
+        tests:
+          - not_null
+      - name: nrr_trailing_30d
+        description: Net Revenue Retention over trailing 30 days (ratio, 1.0 = flat)
+
+  # ============================================================
+  # Phase 6 — Experiment Results
+  # ============================================================
+  - name: experiment_results
+    description: >
+      A/B test outcomes at user x experiment x metric grain.
+      Captures activated_d7, paid_d30, retention_d30, and mrr_at_30d
+      per user per experiment. Aggregate in BI to get variant-level lift.
+      One row per user_id x experiment_id x primary_metric_name.
+    tags: [experimentation, ab_test]
+    columns:
+      - name: experiment_result_id
+        description: Surrogate key (experiment_id + user_id + primary_metric_name)
+        tests:
+          - not_null
+          - unique
+      - name: experiment_id
+        description: Identifier for the A/B experiment
+        tests:
+          - not_null
+      - name: variant
+        description: Variant the user was assigned to ('control' or 'treatment')
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['control', 'treatment']
+      - name: user_id
+        description: Finary user identifier
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_users')
+              field: user_id
+      - name: assignment_date
+        description: Date the user was assigned to the experiment
+        tests:
+          - not_null
+      - name: primary_metric_name
+        description: The metric being measured for this row
+        tests:
+          - not_null
+          - accepted_values:
+              values:
+                - activated_d7
+                - paid_d30
+                - retention_d30
+                - mrr_at_30d
+      - name: primary_metric_value
+        description: Metric value (0/1 for binary metrics, USD for mrr_at_30d)
+        tests:
+          - not_null
+      - name: updated_at
+        description: Timestamp of last refresh
+        tests:
+          - not_null
+
+  # ============================================================
+  # Phase 7 — User LTV Predictions
+  # ============================================================
+  - name: user_ltv_predictions
+    description: >
+      Per-user LTV feature store and scoring output.
+      Rule-based LTV tier (high/medium/low) until ML pipeline writes back scores.
+      One row per user_id (latest state, full refresh daily).
+      Used for growth targeting, paid conversion prioritisation, and ML training.
+    tags: [ltv, ml, scoring]
+    columns:
+      - name: ltv_prediction_id
+        description: Surrogate key (user_id)
+        tests:
+          - not_null
+          - unique
+      - name: user_id
+        description: Finary user identifier
+        tests:
+          - not_null
+          - unique
+          - relationships:
+              to: ref('stg_users')
+              field: user_id
+      - name: plan_type
+        description: Current plan type
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['free', 'premium', 'premium_plus', 'trial']
+      - name: is_paying
+        description: Whether the user has an active paid subscription
+        tests:
+          - not_null
+      - name: has_connected_account
+        description: Whether the user has at least one active institution connection
+        tests:
+          - not_null
+      - name: ltv_tier
+        description: LTV bucket (high/medium/low) based on rule-based predicted LTV
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['high', 'medium', 'low']
+      - name: predicted_ltv_usd_rule_based
+        description: Rule-based LTV estimate (ARPU × estimated lifetime months)
+        tests:
+          - not_null
+      - name: ltv_ml_score_usd
+        description: ML model LTV score (null until ML pipeline is live)
+      - name: retention_rate_d7
+        description: Whether the user was retained at D7 (binary)
+      - name: retention_rate_d30
+        description: Whether the user was retained at D30 (binary)
+      - name: scored_at
+        description: Timestamp when the scoring row was last computed
+        tests:
+          - not_null

@@ -1,0 +1,164 @@
+version: 2
+
+models:
+  - name: user_retention_cohort_metrics
+    description: >
+      D7/D30/D90 retention rates by signup cohort (week) and plan type.
+      Grain: one row per cohort_date x plan_type_at_signup.
+      Used for: CEO dashboard Panel 2 (Activation Rate D7), cohort retention analysis.
+    config:
+      tags: ['retention', 'cohort', 'weekly_kpi']
+    columns:
+      - name: cohort_metric_id
+        description: Surrogate key (cohort_date + plan_type_at_signup)
+        tests:
+          - not_null
+          - unique
+      - name: cohort_date
+        description: Week-truncated signup date (Monday)
+        tests:
+          - not_null
+      - name: plan_type_at_signup
+        description: User's plan type at time of signup
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['free', 'premium', 'premium_plus', 'unknown']
+      - name: cohort_size
+        description: Total users who signed up in this cohort week
+        tests:
+          - not_null
+      - name: retained_users_d7
+        description: Users from cohort who logged in at least once within 7 days of signup
+        tests:
+          - not_null
+      - name: retention_rate_d7
+        description: retained_users_d7 / cohort_size
+        tests:
+          - not_null
+      - name: retained_users_d30
+        tests:
+          - not_null
+      - name: retention_rate_d30
+        tests:
+          - not_null
+      - name: retained_users_d90
+        tests:
+          - not_null
+      - name: retention_rate_d90
+        tests:
+          - not_null
+      - name: updated_at
+        tests:
+          - not_null
+
+  - name: revenue_daily_metrics
+    description: >
+      Daily MRR, ARPU, NRR, churn MRR, expansion MRR, and contraction MRR.
+      Grain: one row per metric_date.
+      Used for: CEO dashboard Panel 4 (MRR + NRR), revenue trend analysis.
+    config:
+      tags: ['revenue', 'mrr', 'weekly_kpi']
+    columns:
+      - name: revenue_metric_id
+        description: Surrogate key (metric_date)
+        tests:
+          - not_null
+          - unique
+      - name: metric_date
+        description: Calendar date
+        tests:
+          - not_null
+      - name: active_subscribers
+        description: Count of active paying subscribers as of end of day
+        tests:
+          - not_null
+      - name: mrr_usd
+        description: Monthly Recurring Revenue in USD at end of day
+        tests:
+          - not_null
+      - name: arpu_usd
+        description: Average Revenue Per User = mrr_usd / active_subscribers
+      - name: new_mrr_usd
+        description: MRR from first-time paying users activated on this day
+        tests:
+          - not_null
+      - name: new_paying_users
+        description: Count of new paying users on this day
+        tests:
+          - not_null
+      - name: churned_mrr_usd
+        description: MRR lost from cancellations on this day
+        tests:
+          - not_null
+      - name: churned_users
+        description: Count of users who cancelled on this day
+        tests:
+          - not_null
+      - name: expansion_mrr_usd
+        description: MRR gained from upgrades on this day
+        tests:
+          - not_null
+      - name: contraction_mrr_usd
+        description: MRR lost from downgrades on this day
+        tests:
+          - not_null
+      - name: net_new_mrr_usd
+        description: new_mrr + expansion - churn - contraction
+        tests:
+          - not_null
+      - name: nrr_trailing_30d
+        description: Net Revenue Retention ratio over trailing 30 days
+      - name: updated_at
+        tests:
+          - not_null
+
+  - name: experiment_results
+    description: >
+      Per-user x per-metric A/B test outcomes.
+      Grain: one row per experiment_id x user_id x primary_metric_name.
+      Metrics: activated_d7, paid_d30, retention_d30, mrr_at_30d.
+      Used for: A/B test readout, experiment lift analysis.
+      DEPENDENCY: requires stg_experiment_assignments to exist in prod.
+    config:
+      tags: ['experimentation', 'ab_test', 'phase6']
+    columns:
+      - name: experiment_result_id
+        description: Surrogate key (experiment_id + user_id + primary_metric_name)
+        tests:
+          - not_null
+          - unique
+      - name: experiment_id
+        description: Identifier for the experiment
+        tests:
+          - not_null
+      - name: variant
+        description: Experiment arm the user was assigned to
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['control', 'treatment']
+      - name: user_id
+        description: Finary user identifier
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_users')
+              field: user_id
+      - name: assignment_date
+        description: Date the user was assigned to this experiment
+        tests:
+          - not_null
+      - name: primary_metric_name
+        description: Name of the outcome metric
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['activated_d7', 'paid_d30', 'retention_d30', 'mrr_at_30d']
+      - name: primary_metric_value
+        description: Float value of the metric (0/1 for boolean metrics, MRR for continuous)
+        tests:
+          - not_null
+      - name: updated_at
+        tests:
+          - not_null

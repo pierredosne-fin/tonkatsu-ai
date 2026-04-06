@@ -14,9 +14,10 @@ interface Props {
   agentId: string;
   onClose: () => void;
   onDelete: (agentId: string) => void;
+  onEdit?: (agentId: string) => void;
 }
 
-export function ChatModal({ agentId, onClose, onDelete }: Props) {
+export function ChatModal({ agentId, onClose, onDelete, onEdit }: Props) {
   const agent = useAgentStore((s) => s.agents.find((a) => a.id === agentId));
   const allAgents = useAgentStore((s) => {
     const current = s.agents.find((a) => a.id === agentId);
@@ -136,7 +137,7 @@ export function ChatModal({ agentId, onClose, onDelete }: Props) {
   function selectSession(session: ConversationSession) {
     setResumeOpen(false);
     setInput('');
-    resumeSession(agentId, session.file);
+    resumeSession(agentId, session.sessionId);
   }
 
   function insertMention(name: string) {
@@ -229,6 +230,9 @@ export function ChatModal({ agentId, onClose, onDelete }: Props) {
             >
               ✦ New
             </button>
+            {onEdit && (
+              <button className="btn btn-ghost btn-sm" onClick={() => onEdit(agentId)} title="Edit agent">✎</button>
+            )}
             <button className="btn btn-danger btn-sm" onClick={handleDelete}>🗑</button>
             <button className="modal-close" onClick={onClose}>✕</button>
           </div>
@@ -319,13 +323,13 @@ export function ChatModal({ agentId, onClose, onDelete }: Props) {
               ) : (
                 sessions.map((s, i) => (
                   <button
-                    key={s.file}
+                    key={s.sessionId}
                     className={`mention-item ${i === resumeIndex ? 'mention-item--active' : ''}`}
                     onMouseDown={(e) => { e.preventDefault(); selectSession(s); }}
                   >
-                    <span className="mention-name">{s.label}</span>
+                    <span className="mention-name">{s.summary || s.firstPrompt || s.sessionId.slice(0, 8)}</span>
                     <span className="mention-status" style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>
-                      {s.messageCount} msg{s.messageCount !== 1 ? 's' : ''}
+                      {new Date(s.lastModified).toLocaleString()}
                     </span>
                   </button>
                 ))

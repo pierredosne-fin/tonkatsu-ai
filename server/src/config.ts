@@ -1,9 +1,8 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
-// Load .env manually (no dotenv dependency needed for simple case)
+// Load .env manually so ANTHROPIC_API_KEY is available in process.env for the SDK
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const envPath = join(__dirname, '../../.env');
 try {
@@ -22,6 +21,3 @@ try {
 }
 
 export const PORT = Number(process.env.PORT ?? 3001);
-export const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});

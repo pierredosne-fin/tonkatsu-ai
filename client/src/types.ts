@@ -20,6 +20,7 @@ export interface Agent {
   teamId: string;
   workspacePath: string;
   worktreeOf?: string;
+  canCreateAgents?: boolean;
   pendingQuestion?: string;
   lastActivity: string;
   createdAt: string;
@@ -37,6 +38,10 @@ export interface AgentTemplate {
   name: string;
   mission: string;
   avatarColor: string;
+  description?: string;
+  tags?: string[];
+  isPublic?: boolean;
+  category?: string;
   createdAt: string;
 }
 
@@ -44,12 +49,16 @@ export interface TeamTemplate {
   id: string;
   name: string;
   agentTemplateIds: string[];
+  description?: string;
+  tags?: string[];
+  isPublic?: boolean;
+  category?: string;
   createdAt: string;
 }
 
 export interface ConversationSession {
-  file: string;
-  isCurrent: boolean;
-  messageCount: number;
-  label: string;
+  sessionId: string;
+  summary: string;
+  lastModified: number;
+  firstPrompt?: string;
 }

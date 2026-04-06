@@ -15,9 +15,10 @@ const ROOMS: RoomType[] = Array.from({ length: GRID_COLS * GRID_ROWS }, (_, i) =
 
 interface Props {
   onAgentClick: (agentId: string) => void;
+  onEmptyRoomClick?: (roomId: string) => void;
 }
 
-export function OfficeMap({ onAgentClick }: Props) {
+export function OfficeMap({ onAgentClick, onEmptyRoomClick }: Props) {
   const agents = useAgentStore((s) => s.agents);
   const currentTeamId = useAgentStore((s) => s.currentTeamId);
   const swapAgentRooms = useAgentStore((s) => s.swapAgentRooms);
@@ -59,6 +60,7 @@ export function OfficeMap({ onAgentClick }: Props) {
             room={room}
             agent={agentByRoom.get(room.id)}
             onAgentClick={onAgentClick}
+            onEmptyRoomClick={!agentByRoom.get(room.id) && onEmptyRoomClick ? () => onEmptyRoomClick(room.id) : undefined}
             isDragging={dragSourceRoomId === room.id}
             isDropTarget={dropTargetRoomId === room.id && dragSourceRoomId !== room.id}
             onDragStart={() => handleDragStart(room.id)}

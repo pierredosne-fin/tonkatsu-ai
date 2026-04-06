@@ -3,6 +3,7 @@ import { z } from 'zod';
 import * as templateService from '../services/templateService.js';
 import * as agentService from '../services/agentService.js';
 import * as roomService from '../services/roomService.js';
+import * as fileService from '../services/fileService.js';
 import type { Server } from 'socket.io';
 
 const AgentTemplateSchema = z.object({
@@ -39,6 +40,86 @@ export function createTemplatesRouter(io: Server) {
     res.status(201).json(template);
   });
 
+  router.patch('/agents/:id', (req, res) => {
+    const result = AgentTemplateSchema.partial().safeParse(req.body);
+    if (!result.success) {
+      res.status(400).json({ error: result.error.flatten() });
+      return;
+    }
+    const updated = templateService.updateAgentTemplate(req.params.id, result.data);
+    if (!updated) {
+      res.status(404).json({ error: 'Agent template not found' });
+      return;
+    }
+    res.json(updated);
+  });
+
+  // ── Agent Template Workspace Files ──────────────────────────────────────────
+
+  router.get('/agents/:id/files', (req, res) => {
+    const t = templateService.getAgentTemplate(req.params.id);
+    if (!t) { res.status(404).json({ error: 'Not found' }); return; }
+    res.json(fileService.readWorkspaceFiles(templateService.getAgentTemplateWorkspacePath(req.params.id)));
+  });
+
+  router.put('/agents/:id/files/claude-md', (req, res) => {
+    if (!templateService.getAgentTemplate(req.params.id)) { res.status(404).json({ error: 'Not found' }); return; }
+    const { content } = req.body;
+    if (typeof content !== 'string') { res.status(400).json({ error: 'content required' }); return; }
+    fileService.writeClaudeMd(templateService.getAgentTemplateWorkspacePath(req.params.id), content);
+    res.json({ ok: true });
+  });
+
+  router.put('/agents/:id/files/settings', (req, res) => {
+    if (!templateService.getAgentTemplate(req.params.id)) { res.status(404).json({ error: 'Not found' }); return; }
+    const { content } = req.body;
+    if (typeof content !== 'string') { res.status(400).json({ error: 'content required' }); return; }
+    try { fileService.writeSettings(templateService.getAgentTemplateWorkspacePath(req.params.id), content); res.json({ ok: true }); }
+    catch { res.status(400).json({ error: 'Invalid JSON' }); }
+  });
+
+  router.put('/agents/:id/files/commands/:name(*)', (req, res) => {
+    if (!templateService.getAgentTemplate(req.params.id)) { res.status(404).json({ error: 'Not found' }); return; }
+    const { content } = req.body;
+    if (typeof content !== 'string') { res.status(400).json({ error: 'content required' }); return; }
+    try { fileService.writeCommand(templateService.getAgentTemplateWorkspacePath(req.params.id), req.params.name, content); res.json({ ok: true }); }
+    catch (e: unknown) { res.status(400).json({ error: e instanceof Error ? e.message : 'error' }); }
+  });
+
+  router.delete('/agents/:id/files/commands/:name(*)', (req, res) => {
+    if (!templateService.getAgentTemplate(req.params.id)) { res.status(404).json({ error: 'Not found' }); return; }
+    try { fileService.deleteCommand(templateService.getAgentTemplateWorkspacePath(req.params.id), req.params.name); res.status(204).send(); }
+    catch (e: unknown) { res.status(400).json({ error: e instanceof Error ? e.message : 'error' }); }
+  });
+
+  router.put('/agents/:id/files/rules/:name(*)', (req, res) => {
+    if (!templateService.getAgentTemplate(req.params.id)) { res.status(404).json({ error: 'Not found' }); return; }
+    const { content } = req.body;
+    if (typeof content !== 'string') { res.status(400).json({ error: 'content required' }); return; }
+    try { fileService.writeRule(templateService.getAgentTemplateWorkspacePath(req.params.id), req.params.name, content); res.json({ ok: true }); }
+    catch (e: unknown) { res.status(400).json({ error: e instanceof Error ? e.message : 'error' }); }
+  });
+
+  router.delete('/agents/:id/files/rules/:name(*)', (req, res) => {
+    if (!templateService.getAgentTemplate(req.params.id)) { res.status(404).json({ error: 'Not found' }); return; }
+    try { fileService.deleteRule(templateService.getAgentTemplateWorkspacePath(req.params.id), req.params.name); res.status(204).send(); }
+    catch (e: unknown) { res.status(400).json({ error: e instanceof Error ? e.message : 'error' }); }
+  });
+
+  router.put('/agents/:id/files/skills/:name', (req, res) => {
+    if (!templateService.getAgentTemplate(req.params.id)) { res.status(404).json({ error: 'Not found' }); return; }
+    const { content } = req.body;
+    if (typeof content !== 'string') { res.status(400).json({ error: 'content required' }); return; }
+    try { fileService.writeSkill(templateService.getAgentTemplateWorkspacePath(req.params.id), req.params.name, content); res.json({ ok: true }); }
+    catch (e: unknown) { res.status(400).json({ error: e instanceof Error ? e.message : 'error' }); }
+  });
+
+  router.delete('/agents/:id/files/skills/:name', (req, res) => {
+    if (!templateService.getAgentTemplate(req.params.id)) { res.status(404).json({ error: 'Not found' }); return; }
+    try { fileService.deleteSkill(templateService.getAgentTemplateWorkspacePath(req.params.id), req.params.name); res.status(204).send(); }
+    catch (e: unknown) { res.status(400).json({ error: e instanceof Error ? e.message : 'error' }); }
+  });
+
   router.delete('/agents/:id', (req, res) => {
     const deleted = templateService.deleteAgentTemplate(req.params.id);
     if (!deleted) {
@@ -66,6 +147,14 @@ export function createTemplatesRouter(io: Server) {
       return;
     }
     res.status(201).json(template);
+  });
+
+  router.patch('/teams/:id', (req, res) => {
+    const result = TeamTemplateSchema.partial().safeParse(req.body);
+    if (!result.success) { res.status(400).json({ error: result.error.flatten() }); return; }
+    const updated = templateService.updateTeamTemplate(req.params.id, result.data);
+    if (!updated) { res.status(404).json({ error: 'Team template not found' }); return; }
+    res.json(updated);
   });
 
   router.delete('/teams/:id', (req, res) => {
@@ -114,6 +203,11 @@ export function createTemplatesRouter(io: Server) {
         templateSlug: agentTemplate.name.toLowerCase().replace(/\s+/g, '-'),
       });
       if (agent) {
+        // Copy template workspace files to the agent's workspace
+        fileService.copyWorkspaceFiles(
+          templateService.getAgentTemplateWorkspacePath(agentTemplate.id),
+          agent.workspacePath,
+        );
         io.emit('agent:created', agentService.toClientAgent(agent));
         createdAgents.push(agentService.toClientAgent(agent));
       }

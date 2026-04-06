@@ -1,16 +1,21 @@
 import { useState } from 'react';
 import { useTemplateStore } from '../store/templateStore';
+import type { TeamTemplate } from '../types';
 
 interface Props {
   onClose: () => void;
   onCreated: () => void;
+  editTemplate?: TeamTemplate;
 }
 
-export function CreateTeamTemplateModal({ onClose, onCreated }: Props) {
+export function CreateTeamTemplateModal({ onClose, onCreated, editTemplate }: Props) {
   const agentTemplates = useTemplateStore((s) => s.agentTemplates);
   const createTeamTemplate = useTemplateStore((s) => s.createTeamTemplate);
-  const [name, setName] = useState('');
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const updateTeamTemplate = useTemplateStore((s) => s.updateTeamTemplate);
+  const isEdit = !!editTemplate;
+
+  const [name, setName] = useState(editTemplate?.name ?? '');
+  const [selectedIds, setSelectedIds] = useState<string[]>(editTemplate?.agentTemplateIds ?? []);
   const [loading, setLoading] = useState(false);
 
   const addAgent = () => {
@@ -30,7 +35,12 @@ export function CreateTeamTemplateModal({ onClose, onCreated }: Props) {
     e.preventDefault();
     if (!name.trim() || selectedIds.length === 0) return;
     setLoading(true);
-    const result = await createTeamTemplate({ name: name.trim(), agentTemplateIds: selectedIds });
+    let result;
+    if (isEdit) {
+      result = await updateTeamTemplate(editTemplate!.id, { name: name.trim(), agentTemplateIds: selectedIds });
+    } else {
+      result = await createTeamTemplate({ name: name.trim(), agentTemplateIds: selectedIds });
+    }
     setLoading(false);
     if (result) {
       onCreated();
@@ -42,7 +52,7 @@ export function CreateTeamTemplateModal({ onClose, onCreated }: Props) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>New Team Template</h2>
+          <h2>{isEdit ? 'Edit Team Template' : 'New Team Template'}</h2>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
         <form onSubmit={handleSubmit} className="modal-body">
@@ -74,10 +84,7 @@ export function CreateTeamTemplateModal({ onClose, onCreated }: Props) {
                   return (
                     <div key={index} className="team-tpl-agent-row">
                       {tpl && (
-                        <span
-                          className="template-dot"
-                          style={{ backgroundColor: tpl.avatarColor }}
-                        />
+                        <span className="template-dot" style={{ backgroundColor: tpl.avatarColor }} />
                       )}
                       <select
                         value={id}
@@ -88,11 +95,7 @@ export function CreateTeamTemplateModal({ onClose, onCreated }: Props) {
                           <option key={t.id} value={t.id}>{t.name}</option>
                         ))}
                       </select>
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => removeAgent(index)}
-                      >✕</button>
+                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => removeAgent(index)}>✕</button>
                     </div>
                   );
                 })}
@@ -112,7 +115,7 @@ export function CreateTeamTemplateModal({ onClose, onCreated }: Props) {
               className="btn btn-primary"
               disabled={loading || !name.trim() || selectedIds.length === 0 || agentTemplates.length === 0}
             >
-              {loading ? 'Saving…' : 'Save Template'}
+              {loading ? 'Saving…' : (isEdit ? 'Save Changes' : 'Save Template')}
             </button>
           </div>
         </form>

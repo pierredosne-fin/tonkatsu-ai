@@ -7,12 +7,10 @@ export function registerHandlers(io: Server, socket: Socket): void {
   socket.emit('agent:list', agentService.getAllAgents().map(agentService.toClientAgent));
   socket.emit('team:list', agentService.getTeamList());
 
-  socket.on('agent:subscribe', ({ agentId }: { agentId: string }) => {
+  socket.on('agent:subscribe', async ({ agentId }: { agentId: string }) => {
     socket.join(`agent:${agentId}`);
-    const agent = agentService.getAgent(agentId);
-    if (agent) {
-      socket.emit('agent:history', { agentId, history: agent.conversationHistory });
-    }
+    const history = await agentService.getHistory(agentId);
+    socket.emit('agent:history', { agentId, history });
   });
 
   socket.on('agent:unsubscribe', ({ agentId }: { agentId: string }) => {
@@ -26,10 +24,8 @@ export function registerHandlers(io: Server, socket: Socket): void {
       const agent = agentService.getAgent(agentId);
       if (!agent || agent.status === 'working' || agent.status === 'delegating') return;
 
-      const msg = { role: 'user' as const, content: message };
-      agentService.appendMessage(agentId, msg);
-      io.emit('agent:message', { agentId, message: msg });
-      runAgentTask(agentId, io);
+      io.emit('agent:message', { agentId, message: { role: 'user', content: message } });
+      runAgentTask(agentId, io, message);
     }
   );
 
@@ -40,7 +36,7 @@ export function registerHandlers(io: Server, socket: Socket): void {
     io.emit('agent:statusChanged', { agentId, status: 'sleeping' });
   });
 
-  // Start a fresh conversation (archives current history)
+  // Start a fresh conversation — clears SDK session, next run creates a new one
   socket.on('agent:newConversation', ({ agentId }: { agentId: string }) => {
     const agent = agentService.getAgent(agentId);
     if (!agent || agent.status === 'working' || agent.status === 'delegating') return;
@@ -58,9 +54,9 @@ export function registerHandlers(io: Server, socket: Socket): void {
     }
   });
 
-  // List archived conversation sessions for an agent
-  socket.on('agent:listSessions', ({ agentId }: { agentId: string }) => {
-    const sessions = agentService.getSessionList(agentId);
+  // List SDK sessions for an agent's workspace
+  socket.on('agent:listSessions', async ({ agentId }: { agentId: string }) => {
+    const sessions = await agentService.listAgentSessions(agentId);
     socket.emit('agent:sessions', { agentId, sessions });
   });
 
@@ -72,13 +68,12 @@ export function registerHandlers(io: Server, socket: Socket): void {
     }
   });
 
-  // Resume a specific archived session
-  socket.on('agent:resumeSession', ({ agentId, file }: { agentId: string; file: string }) => {
+  // Resume a specific SDK session by sessionId
+  socket.on('agent:resumeSession', async ({ agentId, sessionId }: { agentId: string; sessionId: string }) => {
     const agent = agentService.getAgent(agentId);
     if (!agent || agent.status === 'working' || agent.status === 'delegating') return;
-    const history = agentService.resumeSession(agentId, file);
-    if (history !== null) {
-      io.to(`agent:${agentId}`).emit('agent:history', { agentId, history });
-    }
+    agentService.setAgentSession(agentId, sessionId);
+    const history = await agentService.getHistory(agentId);
+    io.to(`agent:${agentId}`).emit('agent:history', { agentId, history });
   });
 }

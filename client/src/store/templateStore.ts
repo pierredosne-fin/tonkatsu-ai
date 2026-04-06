@@ -6,7 +6,9 @@ interface TemplateStore {
   teamTemplates: TeamTemplate[];
   fetchAll: () => Promise<void>;
   createAgentTemplate: (params: { name: string; mission: string; avatarColor: string }) => Promise<AgentTemplate | null>;
+  updateAgentTemplate: (id: string, params: { name: string; mission: string; avatarColor: string }) => Promise<AgentTemplate | null>;
   createTeamTemplate: (params: { name: string; agentTemplateIds: string[] }) => Promise<TeamTemplate | null>;
+  updateTeamTemplate: (id: string, params: { name?: string; agentTemplateIds?: string[] }) => Promise<TeamTemplate | null>;
   deleteAgentTemplate: (id: string) => Promise<void>;
   deleteTeamTemplate: (id: string) => Promise<void>;
 }
@@ -37,6 +39,30 @@ export const useTemplateStore = create<TemplateStore>((set, get) => ({
     });
     if (!res.ok) return null;
     const template: AgentTemplate = await res.json();
+    await get().fetchAll();
+    return template;
+  },
+
+  updateAgentTemplate: async (id, params) => {
+    const res = await fetch(`/api/templates/agents/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    if (!res.ok) return null;
+    const template: AgentTemplate = await res.json();
+    await get().fetchAll();
+    return template;
+  },
+
+  updateTeamTemplate: async (id, params) => {
+    const res = await fetch(`/api/templates/teams/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    if (!res.ok) return null;
+    const template: TeamTemplate = await res.json();
     await get().fetchAll();
     return template;
   },

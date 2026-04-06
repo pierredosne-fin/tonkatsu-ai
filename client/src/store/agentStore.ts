@@ -35,6 +35,7 @@ interface AgentStore {
   setAgents: (agents: Agent[]) => void;
   addAgent: (agent: Agent) => void;
   removeAgent: (agentId: string) => void;
+  updateAgent: (agent: Agent) => void;
   updateStatus: (agentId: string, status: AgentStatus, pendingQuestion?: string) => void;
   swapAgentRooms: (agentId1: string, agentId2: string | null, roomId1: string, roomId2: string) => void;
   appendStream: (agentId: string, chunk: string) => void;
@@ -79,6 +80,11 @@ export const useAgentStore = create<AgentStore>((set) => ({
     set((state) => ({
       agents: state.agents.filter((a) => a.id !== agentId),
       selectedAgentId: state.selectedAgentId === agentId ? null : state.selectedAgentId,
+    })),
+
+  updateAgent: (agent) =>
+    set((state) => ({
+      agents: state.agents.map((a) => (a.id === agent.id ? agent : a)),
     })),
 
   updateStatus: (agentId, status, pendingQuestion) =>

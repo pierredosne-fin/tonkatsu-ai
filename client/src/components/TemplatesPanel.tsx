@@ -15,6 +15,8 @@ export function TemplatesPanel({ onClose }: Props) {
 
   const [showCreateAgent, setShowCreateAgent] = useState(false);
   const [showCreateTeam, setShowCreateTeam] = useState(false);
+  const [editAgentTemplateId, setEditAgentTemplateId] = useState<string | null>(null);
+  const [editTeamTemplateId, setEditTeamTemplateId] = useState<string | null>(null);
   const [spawningId, setSpawningId] = useState<string | null>(null);
   const [spawnName, setSpawnName] = useState('');
   const [spawning, setSpawning] = useState(false);
@@ -64,6 +66,11 @@ export function TemplatesPanel({ onClose }: Props) {
                   <span className="template-name">{t.name}</span>
                   <button
                     className="btn btn-ghost btn-sm"
+                    onClick={() => setEditAgentTemplateId(t.id)}
+                    title="Edit template"
+                  >✎</button>
+                  <button
+                    className="btn btn-ghost btn-sm"
                     onClick={() => deleteAgentTemplate(t.id)}
                     title="Delete template"
                   >✕</button>
@@ -90,6 +97,11 @@ export function TemplatesPanel({ onClose }: Props) {
                     <span className="templates-agent-count">
                       {t.agentTemplateIds.length} agent{t.agentTemplateIds.length !== 1 ? 's' : ''}
                     </span>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => setEditTeamTemplateId(t.id)}
+                      title="Edit template"
+                    >✎</button>
                     <button
                       className="btn btn-ghost btn-sm"
                       onClick={() => handleSpawnStart(t.id, t.name)}
@@ -142,12 +154,32 @@ export function TemplatesPanel({ onClose }: Props) {
           onCreated={() => {}}
         />
       )}
+      {editAgentTemplateId && (() => {
+        const t = agentTemplates.find((x) => x.id === editAgentTemplateId);
+        return t ? (
+          <CreateAgentTemplateModal
+            onClose={() => setEditAgentTemplateId(null)}
+            onCreated={() => {}}
+            editTemplate={t}
+          />
+        ) : null;
+      })()}
       {showCreateTeam && (
         <CreateTeamTemplateModal
           onClose={() => setShowCreateTeam(false)}
           onCreated={() => {}}
         />
       )}
+      {editTeamTemplateId && (() => {
+        const t = teamTemplates.find((x) => x.id === editTeamTemplateId);
+        return t ? (
+          <CreateTeamTemplateModal
+            onClose={() => setEditTeamTemplateId(null)}
+            onCreated={() => {}}
+            editTemplate={t}
+          />
+        ) : null;
+      })()}
     </>
   );
 }

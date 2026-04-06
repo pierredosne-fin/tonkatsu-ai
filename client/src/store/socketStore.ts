@@ -56,7 +56,7 @@ interface SocketStore {
   newConversation: (agentId: string) => void;
   newTeamConversation: (teamId: string) => void;
   listSessions: (agentId: string) => void;
-  resumeSession: (agentId: string, file: string) => void;
+  resumeSession: (agentId: string, sessionId: string) => void;
   moveAgentRoom: (agentId: string, targetRoomId: string) => void;
 }
 
@@ -78,6 +78,10 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
 
     socket.on('agent:created', (agent: Agent) => {
       useAgentStore.getState().addAgent(agent);
+    });
+
+    socket.on('agent:updated', (agent: Agent) => {
+      useAgentStore.getState().updateAgent(agent);
     });
 
     socket.on('agent:deleted', ({ agentId }: { agentId: string }) => {
@@ -238,13 +242,13 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
     get().socket?.emit('agent:listSessions', { agentId });
   },
 
-  resumeSession: (agentId, file) => {
+  resumeSession: (agentId, sessionId) => {
     const { socket } = get();
     if (!socket) return;
     useAgentStore.getState().clearStream(agentId);
     useAgentStore.getState().clearToolEvents(agentId);
     useAgentStore.getState().resetToolCounter(agentId);
-    socket.emit('agent:resumeSession', { agentId, file });
+    socket.emit('agent:resumeSession', { agentId, sessionId });
   },
 
   moveAgentRoom: (agentId, targetRoomId) => {
