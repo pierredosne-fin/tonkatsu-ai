@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import type { Agent, AgentTemplate, TeamTemplate } from '../models/types.js';
+import type { Agent, AgentTemplate, TeamTemplate, CronSchedule } from '../models/types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const WORKSPACES_DIR = join(__dirname, '../../../workspaces');
@@ -192,6 +192,29 @@ export function saveTemplates(data: { agentTemplates: AgentTemplate[]; teamTempl
     writeFileSync(TEMPLATES_PATH(), JSON.stringify(data, null, 2), 'utf-8');
   } catch (err) {
     console.warn('[persistence] Failed to save templates:', err);
+  }
+}
+
+// ── Schedules (schedules.json at workspace root) ──────────────────────────────
+
+const SCHEDULES_PATH = () => join(WORKSPACES_DIR, 'schedules.json');
+
+export function loadSchedules(): CronSchedule[] {
+  const p = SCHEDULES_PATH();
+  if (!existsSync(p)) return [];
+  try {
+    return JSON.parse(readFileSync(p, 'utf-8')) as CronSchedule[];
+  } catch {
+    return [];
+  }
+}
+
+export function saveSchedules(schedules: CronSchedule[]): void {
+  try {
+    mkdirSync(WORKSPACES_DIR, { recursive: true });
+    writeFileSync(SCHEDULES_PATH(), JSON.stringify(schedules, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('[persistence] Failed to save schedules:', err);
   }
 }
 

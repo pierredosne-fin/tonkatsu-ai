@@ -46,6 +46,8 @@ interface AgentStore {
   addToolEvent: (agentId: string, event: ToolEvent) => void;
   clearToolEvents: (agentId: string) => void;
   addDelegationEvent: (event: DelegationEvent) => void;
+  setActiveDelegation: (fromAgentId: string, toAgentId: string) => void;
+  clearActiveDelegation: (fromAgentId: string) => void;
   incrementToolCounter: (agentId: string) => void;
   resetToolCounter: (agentId: string) => void;
   setAgentHistory: (agentId: string, history: Message[]) => void;
@@ -61,6 +63,7 @@ export const useAgentStore = create<AgentStore>((set) => ({
   streamBuffers: new Map(),
   toolEvents: new Map(),
   delegationEvents: new Map(),
+  activeDelegations: new Map(),
   toolCallCounters: new Map(),
   agentHistories: new Map(),
   agentSessions: new Map(),
@@ -148,6 +151,20 @@ export const useAgentStore = create<AgentStore>((set) => ({
       const key = event.fromAgentId;
       next.set(key, [...(next.get(key) ?? []), event]);
       return { delegationEvents: next };
+    }),
+
+  setActiveDelegation: (fromAgentId, toAgentId) =>
+    set((state) => {
+      const next = new Map(state.activeDelegations);
+      next.set(fromAgentId, toAgentId);
+      return { activeDelegations: next };
+    }),
+
+  clearActiveDelegation: (fromAgentId) =>
+    set((state) => {
+      const next = new Map(state.activeDelegations);
+      next.delete(fromAgentId);
+      return { activeDelegations: next };
     }),
 
   incrementToolCounter: (agentId) =>

@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { mkdirSync, rmSync, existsSync } from 'fs';
+import { mkdirSync, rmSync, existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { setCreateAgentsPermission } from './fileService.js';
 import type { Agent, AgentStatus, Message } from '../models/types.js';
@@ -90,6 +90,11 @@ export function createAgent(params: {
   } else {
     workspacePath = autoPath;
     mkdirSync(workspacePath, { recursive: true });
+  }
+
+  const mcpJsonPath = join(workspacePath, '.mcp.json');
+  if (!existsSync(mcpJsonPath)) {
+    writeFileSync(mcpJsonPath, JSON.stringify({ mcpServers: {} }, null, 2));
   }
 
   const agent: Agent = {

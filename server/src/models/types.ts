@@ -57,6 +57,16 @@ export interface TeamTemplate {
   createdAt: string;
 }
 
+export interface CronSchedule {
+  id: string;
+  agentId: string;
+  cronExpression: string;
+  message: string;
+  enabled: boolean;
+  createdAt: string;
+  lastFiredAt?: string;
+}
+
 export interface AgentStatusUpdate {
   agentId: string;
   status: AgentStatus;

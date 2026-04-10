@@ -40,6 +40,7 @@ export function Room({
   return (
     <div
       className={classNames}
+      data-room-id={room.id}
       style={{ gridColumn: room.gridCol, gridRow: room.gridRow, cursor: !agent && onEmptyRoomClick ? 'pointer' : undefined }}
       onClick={!agent && onEmptyRoomClick ? onEmptyRoomClick : undefined}
       onDragOver={(e) => e.preventDefault()}

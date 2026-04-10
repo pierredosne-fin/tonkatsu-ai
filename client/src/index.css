@@ -245,6 +245,24 @@ html, body, #root {
   grid-template-rows: repeat(2, 160px);
   gap: 14px;
   width: min(900px, 100%);
+  position: relative;
+}
+
+.office-delegation-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.delegation-dash-line {
+  animation: dash-march 0.5s linear infinite;
+}
+
+@keyframes dash-march {
+  to { stroke-dashoffset: -26; }
 }
 
 /* ── Room ─────────────────────────────────────── */
@@ -483,6 +501,7 @@ html, body, #root {
   transition: background 0.1s;
   border-bottom: 1px solid var(--border);
 }
+.sidebar-item--no-border { border-bottom: none; }
 .sidebar-item:hover { background: var(--surface2); }
 
 .sidebar-dot {
@@ -512,6 +531,36 @@ html, body, #root {
 .sidebar-status--working    { color: var(--accent); }
 .sidebar-status--pending    { color: var(--orange); }
 .sidebar-status--delegating { color: #a78bfa; }
+
+.sidebar-delegation-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 16px 0 20px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar-delegation-link:hover .sidebar-delegation-target {
+  color: var(--text);
+}
+.sidebar-delegation-line {
+  width: 1px;
+  height: 10px;
+  border-left: 2px dashed #a78bfa;
+  opacity: 0.6;
+  align-self: flex-start;
+  margin-left: 4px;
+}
+.sidebar-delegation-target {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #a78bfa;
+  padding: 3px 0 6px;
+  width: 100%;
+  opacity: 0.85;
+}
 
 /* ── Modals ───────────────────────────────────── */
 .modal-overlay {
@@ -768,6 +817,43 @@ html, body, #root {
   word-break: break-word;
 }
 
+.chat-message-content--md { white-space: normal; }
+.chat-message-content--md p  { margin: 0 0 8px; }
+.chat-message-content--md p:last-child { margin-bottom: 0; }
+.chat-message-content--md h1,
+.chat-message-content--md h2,
+.chat-message-content--md h3 { font-weight: 700; margin: 12px 0 6px; color: var(--text); }
+.chat-message-content--md h1 { font-size: 1.1em; }
+.chat-message-content--md h2 { font-size: 1em; }
+.chat-message-content--md h3 { font-size: 0.95em; }
+.chat-message-content--md ul,
+.chat-message-content--md ol { padding-left: 20px; margin: 4px 0 8px; }
+.chat-message-content--md li { margin: 2px 0; }
+.chat-message-content--md code {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  background: rgba(0,0,0,0.3);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+.chat-message-content--md pre {
+  background: rgba(0,0,0,0.3);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  overflow-x: auto;
+  margin: 6px 0;
+}
+.chat-message-content--md pre code { background: none; padding: 0; }
+.chat-message-content--md strong { font-weight: 700; color: var(--text); }
+.chat-message-content--md em { font-style: italic; color: var(--text-dim); }
+.chat-message-content--md blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 10px;
+  color: var(--text-dim);
+  margin: 6px 0;
+}
+.chat-message-content--md a { color: var(--accent-hover); text-decoration: underline; }
+
 .chat-message--user .chat-message-content {
   background: rgba(16,185,129,0.1);
   border: 1px solid rgba(16,185,129,0.2);
@@ -836,6 +922,23 @@ html, body, #root {
   opacity: 0.8;
   white-space: nowrap;
 }
+
+/* ── Event type tags ──────────────────────────── */
+.chat-event-tag {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.chat-event-tag--tool     { background: rgba(99,102,241,0.2);  color: var(--accent); }
+.chat-event-tag--result   { background: rgba(16,185,129,0.2);  color: var(--green); }
+.chat-event-tag--agent    { background: rgba(245,158,11,0.2);  color: var(--orange); }
+.chat-event-tag--response { background: rgba(99,102,241,0.15); color: var(--accent-hover); }
 
 /* ── Tool call events ─────────────────────────── */
 .chat-tool-event {
@@ -1316,4 +1419,166 @@ html, body, #root {
 .team-tpl-select:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+/* ── Schedule Modal ────────────────────────────────────────────────────────── */
+
+.modal--schedule {
+  width: 520px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.schedule-body {
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.schedule-empty {
+  color: var(--text-dim);
+  font-size: 13px;
+  text-align: center;
+  padding: 16px 0;
+}
+
+.schedule-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.schedule-item {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.schedule-item--disabled {
+  opacity: 0.5;
+}
+
+.schedule-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.schedule-expr {
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.schedule-message {
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 280px;
+}
+
+.schedule-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.schedule-last-fired {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.schedule-add-form {
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.schedule-add-form h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+  margin: 0;
+}
+
+.schedule-add-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.schedule-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.schedule-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.schedule-error {
+  font-size: 12px;
+  color: #f87171;
+  margin: 0;
+}
+
+/* ── Sidebar schedules section ─────────────────────────────────────────────── */
+
+.sidebar-section {
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-cron-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  overflow-y: auto;
+}
+
+.sidebar-cron-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background 0.1s;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-cron-item:hover { background: var(--surface2); }
+
+.sidebar-cron-item--disabled { opacity: 0.45; }
+
+.sidebar-cron-expr {
+  font-size: 10px;
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-cron-toggle {
+  padding: 2px 5px;
+  font-size: 11px;
+  flex-shrink: 0;
 }

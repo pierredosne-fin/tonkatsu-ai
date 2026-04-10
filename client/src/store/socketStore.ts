@@ -95,11 +95,16 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
     socket.on(
       'agent:statusChanged',
       ({ agentId, status, pendingQuestion }: { agentId: string; status: AgentStatus; pendingQuestion?: string }) => {
-        useAgentStore.getState().updateStatus(agentId, status, pendingQuestion);
+        const store = useAgentStore.getState();
+        store.updateStatus(agentId, status, pendingQuestion);
         notifyStatusChange(agentId, status, pendingQuestion);
         // Reset tool counter when agent stops working
         if (status !== 'working') {
-          useAgentStore.getState().resetToolCounter(agentId);
+          store.resetToolCounter(agentId);
+        }
+        // Clear delegation link when agent is no longer delegating
+        if (status !== 'delegating') {
+          store.clearActiveDelegation(agentId);
         }
       }
     );
@@ -166,7 +171,8 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
     socket.on(
       'agent:delegating',
       ({ fromAgentId, toAgentId, toAgentName, message }: { fromAgentId: string; toAgentId: string; toAgentName: string; message: string }) => {
-        useAgentStore.getState().addDelegationEvent({
+        const store = useAgentStore.getState();
+        store.addDelegationEvent({
           type: 'delegating',
           fromAgentId,
           toAgentId,
@@ -174,13 +180,15 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
           message,
           timestamp: new Date().toISOString(),
         });
+        store.setActiveDelegation(fromAgentId, toAgentId);
       }
     );
 
     socket.on(
       'agent:delegationComplete',
       ({ fromAgentId, toAgentId, toAgentName, response }: { fromAgentId: string; toAgentId: string; toAgentName: string; response: string }) => {
-        useAgentStore.getState().addDelegationEvent({
+        const store = useAgentStore.getState();
+        store.addDelegationEvent({
           type: 'complete',
           fromAgentId,
           toAgentId,
@@ -188,6 +196,7 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
           response,
           timestamp: new Date().toISOString(),
         });
+        store.clearActiveDelegation(fromAgentId);
       }
     );
 

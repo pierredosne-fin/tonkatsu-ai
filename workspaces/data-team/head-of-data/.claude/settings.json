@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(curl -s -X POST http://localhost:3001/api/agents*)"
-    ]
-  }
-}

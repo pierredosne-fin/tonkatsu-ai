@@ -6,10 +6,12 @@ import { PORT } from './config.js';
 import { createAgentRouter, createRoomsRouter, createTeamsRouter } from './routes/agents.js';
 import { createWorkspacesRouter } from './routes/workspaces.js';
 import { createTemplatesRouter } from './routes/templates.js';
+import { createSchedulesRouter } from './routes/schedules.js';
 import { registerHandlers } from './socket/handlers.js';
 import { loadAllAgents, scanAllWorkspaceAgents } from './services/persistenceService.js';
 import { restoreAgent, createAgent, getAllAgents } from './services/agentService.js';
 import { loadAllTemplates } from './services/templateService.js';
+import { initSchedules } from './services/cronService.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -29,6 +31,7 @@ app.use('/api/rooms', createRoomsRouter());
 app.use('/api/teams', createTeamsRouter(io));
 app.use('/api/workspaces', createWorkspacesRouter());
 app.use('/api/templates', createTemplatesRouter(io));
+app.use('/api/schedules', createSchedulesRouter(io));
 
 // ── Load templates on startup ────────────────────────────────────────────────
 loadAllTemplates();
@@ -57,6 +60,9 @@ for (const { teamId, workspacePath, config } of discovered) {
 }
 
 console.log(`[startup] ${restored} restored, ${autoCreated} auto-loaded from workspaces/`);
+
+// 3. Initialize cron schedules (must run after agents are restored)
+initSchedules(io);
 
 // ───────────────────────────────────────────────────────────────────────────
 

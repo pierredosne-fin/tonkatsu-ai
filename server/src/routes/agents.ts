@@ -4,6 +4,7 @@ import * as agentService from '../services/agentService.js';
 import * as roomService from '../services/roomService.js';
 import * as fileService from '../services/fileService.js';
 import { runAgentTask } from '../services/claudeService.js';
+import { deleteSchedulesForAgent } from '../services/cronService.js';
 import type { Server } from 'socket.io';
 
 export function createAgentRouter(io: Server) {
@@ -198,6 +199,7 @@ export function createAgentRouter(io: Server) {
       res.status(404).json({ error: 'Agent not found' });
       return;
     }
+    deleteSchedulesForAgent(req.params.id);
     io.emit('agent:deleted', { agentId: req.params.id });
     io.emit('team:list', agentService.getTeamList());
     res.status(204).send();

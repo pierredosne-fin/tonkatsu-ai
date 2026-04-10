@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { useAgentStore } from '../store/agentStore';
 import { useSocketStore } from '../store/socketStore';
 import type { ConversationSession } from '../types';
+import { ScheduleModal } from './ScheduleModal';
 
 const TOOL_ICONS: Record<string, string> = {
   read_file: '📄',
@@ -36,6 +38,7 @@ export function ChatModal({ agentId, onClose, onDelete, onEdit }: Props) {
   const [mentionIndex, setMentionIndex] = useState(0);
   const [resumeOpen, setResumeOpen] = useState(false);
   const [resumeIndex, setResumeIndex] = useState(0);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -230,6 +233,13 @@ export function ChatModal({ agentId, onClose, onDelete, onEdit }: Props) {
             >
               ✦ New
             </button>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => setScheduleOpen(true)}
+              title="Manage schedules"
+            >
+              ⏰
+            </button>
             {onEdit && (
               <button className="btn btn-ghost btn-sm" onClick={() => onEdit(agentId)} title="Edit agent">✎</button>
             )}
@@ -257,52 +267,72 @@ export function ChatModal({ agentId, onClose, onDelete, onEdit }: Props) {
               <span className="chat-message-label">
                 {msg.role === 'user' ? 'You' : agent.name}
               </span>
-              <div className="chat-message-content">{cleanText(msg.content)}</div>
+              <div className="chat-message-content chat-message-content--md">
+                <ReactMarkdown>{cleanText(msg.content)}</ReactMarkdown>
+              </div>
             </div>
           ))}
 
+          {[
+            ...toolEvents.map((ev) => ({ kind: 'tool' as const, ts: ev.timestamp, ev })),
+            ...delegationEvents.map((ev) => ({ kind: 'delegation' as const, ts: ev.timestamp, ev })),
+          ]
+            .sort((a, b) => a.ts.localeCompare(b.ts))
+            .map((item, i) => {
+              if (item.kind === 'tool') {
+                const ev = item.ev;
+                return (
+                  <div key={i} className={`chat-tool-event chat-tool-event--${ev.type}`}>
+                    <span className="chat-tool-icon">{TOOL_ICONS[ev.tool] ?? '🔧'}</span>
+                    <div className="chat-tool-body">
+                      <span className="chat-tool-name">
+                        {ev.type === 'call'
+                          ? <><span className="chat-event-tag chat-event-tag--tool">tool call</span>{ev.tool}</>
+                          : <><span className="chat-event-tag chat-event-tag--result">result</span>{ev.tool}</>
+                        }
+                      </span>
+                      {ev.type === 'call' && ev.input && (
+                        <code className="chat-tool-input">
+                          {Object.entries(ev.input).map(([k, v]) => `${k}: ${String(v).slice(0, 80)}`).join(' | ')}
+                        </code>
+                      )}
+                      {ev.type === 'result' && ev.result && (
+                        <code className="chat-tool-result">{ev.result}</code>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+              const ev = item.ev;
+              return (
+                <div key={i} className={`chat-delegation chat-delegation--${ev.type}`}>
+                  <span className="chat-delegation-icon">{ev.type === 'delegating' ? '📨' : '📩'}</span>
+                  <div className="chat-delegation-body">
+                    <span className="chat-delegation-label">
+                      <span className="chat-event-tag chat-event-tag--agent">agent call</span>
+                      {ev.type === 'delegating' ? `→ ${ev.toAgentName}` : `← ${ev.toAgentName} replied`}
+                    </span>
+                    <div className="chat-delegation-text">
+                      {ev.type === 'delegating' ? ev.message : ev.response}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          }
+
           {streamBuffer && (
             <div className="chat-message chat-message--assistant chat-message--streaming">
-              <span className="chat-message-label">{agent.name}</span>
+              <span className="chat-message-label">
+                <span className="chat-event-tag chat-event-tag--response">response</span>
+                {agent.name}
+              </span>
               <div className="chat-message-content">
-                {cleanText(streamBuffer)}
+                <ReactMarkdown>{cleanText(streamBuffer)}</ReactMarkdown>
                 <span className="cursor-blink">▋</span>
               </div>
             </div>
           )}
-
-          {toolEvents.map((ev, i) => (
-            <div key={i} className={`chat-tool-event chat-tool-event--${ev.type}`}>
-              <span className="chat-tool-icon">{TOOL_ICONS[ev.tool] ?? '🔧'}</span>
-              <div className="chat-tool-body">
-                <span className="chat-tool-name">
-                  {ev.type === 'call' ? ev.tool : `${ev.tool} → result`}
-                </span>
-                {ev.type === 'call' && ev.input && (
-                  <code className="chat-tool-input">
-                    {Object.entries(ev.input).map(([k, v]) => `${k}: ${String(v).slice(0, 80)}`).join(' | ')}
-                  </code>
-                )}
-                {ev.type === 'result' && ev.result && (
-                  <code className="chat-tool-result">{ev.result}</code>
-                )}
-              </div>
-            </div>
-          ))}
-
-          {delegationEvents.map((ev, i) => (
-            <div key={i} className={`chat-delegation chat-delegation--${ev.type}`}>
-              <span className="chat-delegation-icon">{ev.type === 'delegating' ? '📨' : '📩'}</span>
-              <div className="chat-delegation-body">
-                <span className="chat-delegation-label">
-                  {ev.type === 'delegating' ? `Calling ${ev.toAgentName}…` : `${ev.toAgentName} replied`}
-                </span>
-                <div className="chat-delegation-text">
-                  {ev.type === 'delegating' ? ev.message : ev.response}
-                </div>
-              </div>
-            </div>
-          ))}
 
           {agent.status === 'pending' && agent.pendingQuestion && (
             <div className="chat-pending-question">
@@ -386,6 +416,13 @@ export function ChatModal({ agentId, onClose, onDelete, onEdit }: Props) {
           </form>
         </div>
       </div>
+      {scheduleOpen && (
+        <ScheduleModal
+          agentId={agentId}
+          agentName={agent.name}
+          onClose={() => setScheduleOpen(false)}
+        />
+      )}
     </div>
   );
 }
