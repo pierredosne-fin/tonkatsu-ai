@@ -160,6 +160,41 @@ export function copyWorkspaceFiles(srcPath: string, destPath: string): void {
   }
 }
 
+/** Copy an agent's workspace files into a template directory, overwriting everything. */
+export function snapshotWorkspace(agentPath: string, templatePath: string): void {
+  const claudeMd = join(agentPath, 'CLAUDE.md');
+  if (existsSync(claudeMd)) {
+    mkdirSync(templatePath, { recursive: true });
+    copyFileSync(claudeMd, join(templatePath, 'CLAUDE.md'));
+  }
+  const claudeDir = join(agentPath, '.claude');
+  if (existsSync(claudeDir)) {
+    copyDir(claudeDir, join(templatePath, '.claude'));
+  }
+}
+
+export function setupWorkspaceStructure(workspacePath: string, agentName: string, mission: string): void {
+  const today = new Date().toISOString().slice(0, 10);
+
+  // memory/ with daily log and projects/
+  mkdirSync(join(workspacePath, 'memory', 'projects'), { recursive: true });
+  const dailyLog = join(workspacePath, 'memory', `${today}.md`);
+  if (!existsSync(dailyLog)) writeFileSync(dailyLog, `# ${today}\n\n`, 'utf-8');
+
+  // Root files — only created if absent
+  const files: Record<string, string> = {
+    'SOUL.md':   `# Soul\n\n**Name:** ${agentName}\n**Mission:** ${mission}\n\nCore principles and identity of this agent.\n`,
+    'USER.md':   `# User Context\n\nContext about the human operator and their goals.\n`,
+    'OPS.md':    `# Operational Playbook\n\nRecurring tasks, conventions, constraints.\n`,
+    'MEMORY.md': `# Long-term Memory\n\nCurated key learnings and decisions. Keep this concise and up to date.\n`,
+    'TOOLS.md':  `# Tools & Environment\n\nAvailable tools, API endpoints, credentials location.\n`,
+  };
+  for (const [name, content] of Object.entries(files)) {
+    const p = join(workspacePath, name);
+    if (!existsSync(p)) writeFileSync(p, content, 'utf-8');
+  }
+}
+
 export function deleteSkill(workspacePath: string, name: string): void {
   if (!/^[\w-]+$/.test(name)) throw new Error('Invalid skill name');
   const dir = join(workspacePath, '.claude', 'skills', name);

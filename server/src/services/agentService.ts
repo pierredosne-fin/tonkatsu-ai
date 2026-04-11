@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
-import { mkdirSync, rmSync, existsSync, writeFileSync } from 'fs';
+import { mkdirSync, rmSync, existsSync, writeFileSync, renameSync } from 'fs';
 import { join } from 'path';
-import { setCreateAgentsPermission } from './fileService.js';
+import { setCreateAgentsPermission, setupWorkspaceStructure } from './fileService.js';
 import type { Agent, AgentStatus, Message } from '../models/types.js';
 import { assignRoom, freeRoom, swapRooms } from './roomService.js';
 import { isGitRepo, createWorktree, removeWorktree } from './gitService.js';
@@ -47,6 +47,20 @@ export function getTeamList(): { id: string; name: string }[] {
   return Array.from(ids).map((id) => ({ id, name: teamDisplayName(id) }));
 }
 
+export function renameTeam(oldTeamId: string, newTeamId: string): void {
+  const oldDir = join(WORKSPACES_DIR, oldTeamId);
+  const newDir = join(WORKSPACES_DIR, newTeamId);
+  if (existsSync(oldDir)) renameSync(oldDir, newDir);
+  for (const agent of agents.values()) {
+    if (agent.teamId === oldTeamId) {
+      agent.teamId = newTeamId;
+      agent.workspacePath = agent.workspacePath.replace(oldDir, newDir);
+      if (agent.worktreeOf) agent.worktreeOf = agent.worktreeOf.replace(oldDir, newDir);
+    }
+  }
+  persist();
+}
+
 export function createAgent(params: {
   name: string;
   mission: string;
@@ -54,6 +68,7 @@ export function createAgent(params: {
   teamId?: string;
   workspacePath?: string;
   templateSlug?: string;
+  canCreateAgents?: boolean;
 }): Agent | null {
   const teamId = params.teamId?.trim() || DEFAULT_TEAM;
   const room = assignRoom('__temp__', teamId);
@@ -63,14 +78,15 @@ export function createAgent(params: {
   room.agentId = id;
 
   const slug = params.name.toLowerCase().replace(/\s+/g, '-');
-  const teamDir = teamId === DEFAULT_TEAM ? WORKSPACES_DIR : join(WORKSPACES_DIR, teamId);
-  const autoPath = params.templateSlug
+  const teamDir = join(WORKSPACES_DIR, teamId);
+  const autoPath = (params.templateSlug && params.templateSlug !== slug)
     ? join(teamDir, params.templateSlug, slug)
     : join(teamDir, slug);
   const externalPath = params.workspacePath?.trim();
 
   let workspacePath: string;
   let worktreeOf: string | undefined;
+  let isOwnWorkspace = false;
 
   if (externalPath) {
     if (isGitRepo(externalPath)) {
@@ -78,23 +94,27 @@ export function createAgent(params: {
       if (createWorktree(externalPath, autoPath, branch)) {
         workspacePath = autoPath;
         worktreeOf = externalPath;
+        isOwnWorkspace = true;
         console.log(`[git] Created worktree at ${autoPath} (branch: ${branch})`);
       } else {
         workspacePath = externalPath;
-        mkdirSync(workspacePath, { recursive: true });
       }
     } else {
       workspacePath = externalPath;
-      mkdirSync(workspacePath, { recursive: true });
     }
   } else {
     workspacePath = autoPath;
     mkdirSync(workspacePath, { recursive: true });
+    isOwnWorkspace = true;
   }
 
   const mcpJsonPath = join(workspacePath, '.mcp.json');
   if (!existsSync(mcpJsonPath)) {
     writeFileSync(mcpJsonPath, JSON.stringify({ mcpServers: {} }, null, 2));
+  }
+
+  if (isOwnWorkspace) {
+    setupWorkspaceStructure(workspacePath, params.name, params.mission);
   }
 
   const agent: Agent = {
@@ -107,10 +127,14 @@ export function createAgent(params: {
     teamId,
     workspacePath,
     worktreeOf,
-    canCreateAgents: false,
+    canCreateAgents: params.canCreateAgents ?? false,
     lastActivity: new Date(),
     createdAt: new Date(),
   };
+
+  if (agent.canCreateAgents) {
+    setCreateAgentsPermission(workspacePath, true);
+  }
 
   agents.set(id, agent);
   persist();
@@ -143,6 +167,11 @@ export function restoreAgent(persisted: PersistedAgent): Agent | null {
   agents.set(agent.id, agent);
   // Ensure settings.json permission is in sync with persisted canCreateAgents flag
   setCreateAgentsPermission(agent.workspacePath, agent.canCreateAgents ?? false);
+  // Only set up workspace structure for owned workspaces (worktrees or paths under WORKSPACES_DIR)
+  const isOwnWorkspace = !!agent.worktreeOf || agent.workspacePath.startsWith(WORKSPACES_DIR);
+  if (isOwnWorkspace) {
+    setupWorkspaceStructure(agent.workspacePath, agent.name, agent.mission);
+  }
   return agent;
 }
 

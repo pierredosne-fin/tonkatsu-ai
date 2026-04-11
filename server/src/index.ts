@@ -7,11 +7,20 @@ import { createAgentRouter, createRoomsRouter, createTeamsRouter } from './route
 import { createWorkspacesRouter } from './routes/workspaces.js';
 import { createTemplatesRouter } from './routes/templates.js';
 import { createSchedulesRouter } from './routes/schedules.js';
+import { createSkillsRouter } from './routes/skills.js';
 import { registerHandlers } from './socket/handlers.js';
-import { loadAllAgents, scanAllWorkspaceAgents } from './services/persistenceService.js';
-import { restoreAgent, createAgent, getAllAgents } from './services/agentService.js';
-import { loadAllTemplates } from './services/templateService.js';
+import { loadAllAgents } from './services/persistenceService.js';
+import { restoreAgent } from './services/agentService.js';
+import { loadAllTemplates, syncTemplateFolders } from './services/templateService.js';
+import { loadAllSkills } from './services/skillService.js';
 import { initSchedules } from './services/cronService.js';
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[process] Unhandled rejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[process] Uncaught exception:', err);
+});
 
 const app = express();
 const httpServer = createServer(app);
@@ -32,46 +41,42 @@ app.use('/api/teams', createTeamsRouter(io));
 app.use('/api/workspaces', createWorkspacesRouter());
 app.use('/api/templates', createTemplatesRouter(io));
 app.use('/api/schedules', createSchedulesRouter(io));
+app.use('/api/skills', createSkillsRouter());
 
-// ── Load templates on startup ────────────────────────────────────────────────
-loadAllTemplates();
+// ── Load data before accepting connections ───────────────────────────────────
 
-// ── Auto-load agents on startup ─────────────────────────────────────────────
+try { loadAllTemplates(); } catch (err) { console.error('[startup] loadAllTemplates failed:', err); }
+try { syncTemplateFolders(); } catch (err) { console.error('[startup] syncTemplateFolders failed:', err); }
+try { loadAllSkills(); } catch (err) { console.error('[startup] loadAllSkills failed:', err); }
 
-// 1. Restore runtime state (conversation history, room assignments)
-const saved = loadAllAgents();
-let restored = 0;
-for (const persisted of saved) {
-  if (restoreAgent(persisted)) restored++;
-}
-
-// 2. Scan workspaces/ for agent.json files not yet in runtime state
-const knownPaths = new Set(getAllAgents().map((a) => a.workspacePath));
-const discovered = scanAllWorkspaceAgents();
-let autoCreated = 0;
-
-for (const { teamId, workspacePath, config } of discovered) {
-  if (knownPaths.has(workspacePath)) continue;
-  const agent = createAgent({ ...config, teamId, workspacePath });
-  if (agent) {
-    autoCreated++;
-    console.log(`[startup] Auto-loaded agent "${agent.name}" (team: ${teamId}) from ${workspacePath}`);
+try {
+  const saved = loadAllAgents();
+  let restored = 0;
+  for (const persisted of saved) {
+    if (restoreAgent(persisted)) restored++;
   }
+  console.log(`[startup] ${restored} agents restored`);
+} catch (err) {
+  console.error('[startup] loadAllAgents/restoreAgent failed:', err);
 }
 
-console.log(`[startup] ${restored} restored, ${autoCreated} auto-loaded from workspaces/`);
+try { initSchedules(io); } catch (err) { console.error('[startup] initSchedules failed:', err); }
 
-// 3. Initialize cron schedules (must run after agents are restored)
-initSchedules(io);
-
-// ───────────────────────────────────────────────────────────────────────────
+// ── Socket handlers ──────────────────────────────────────────────────────────
 
 io.on('connection', (socket) => {
   console.log(`[socket] connected: ${socket.id}`);
   registerHandlers(io, socket);
-  socket.on('disconnect', () => {
-    console.log(`[socket] disconnected: ${socket.id}`);
+  socket.on('disconnect', (reason) => {
+    console.log(`[socket] disconnected: ${socket.id} reason=${reason}`);
   });
+});
+
+// ── Start listening ───────────────────────────────────────────────────────────
+
+process.on('SIGTERM', () => {
+  console.log('[process] SIGTERM received — tsx is restarting due to a file change in src/');
+  process.exit(0);
 });
 
 httpServer.listen(PORT, () => {

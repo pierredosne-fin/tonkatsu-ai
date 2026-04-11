@@ -7,36 +7,32 @@ export function registerHandlers(io: Server, socket: Socket): void {
   socket.emit('agent:list', agentService.getAllAgents().map(agentService.toClientAgent));
   socket.emit('team:list', agentService.getTeamList());
 
-  socket.on('agent:subscribe', async ({ agentId }: { agentId: string }) => {
+  socket.on('agent:subscribe', ({ agentId }: { agentId: string }) => {
     socket.join(`agent:${agentId}`);
-    const history = await agentService.getHistory(agentId);
-    socket.emit('agent:history', { agentId, history });
+    agentService.getHistory(agentId)
+      .then((history) => socket.emit('agent:history', { agentId, history }))
+      .catch((err) => console.error(`[socket] agent:subscribe error for ${agentId}:`, err));
   });
 
   socket.on('agent:unsubscribe', ({ agentId }: { agentId: string }) => {
     socket.leave(`agent:${agentId}`);
   });
 
-  // User sends a message — works for both pending and sleeping agents
-  socket.on(
-    'agent:sendMessage',
-    ({ agentId, message }: { agentId: string; message: string }) => {
-      const agent = agentService.getAgent(agentId);
-      if (!agent || agent.status === 'working' || agent.status === 'delegating') return;
+  socket.on('agent:sendMessage', ({ agentId, message }: { agentId: string; message: string }) => {
+    const agent = agentService.getAgent(agentId);
+    if (!agent || agent.status === 'working' || agent.status === 'delegating') return;
+    io.emit('agent:message', { agentId, message: { role: 'user', content: message } });
+    runAgentTask(agentId, io, message).catch((err) =>
+      console.error(`[socket] runAgentTask error for ${agentId}:`, err)
+    );
+  });
 
-      io.emit('agent:message', { agentId, message: { role: 'user', content: message } });
-      runAgentTask(agentId, io, message);
-    }
-  );
-
-  // Manually sleep an agent
   socket.on('agent:sleep', ({ agentId }: { agentId: string }) => {
     agentService.abortStream(agentId);
     agentService.setStatus(agentId, 'sleeping');
     io.emit('agent:statusChanged', { agentId, status: 'sleeping' });
   });
 
-  // Start a fresh conversation — clears SDK session, next run creates a new one
   socket.on('agent:newConversation', ({ agentId }: { agentId: string }) => {
     const agent = agentService.getAgent(agentId);
     if (!agent || agent.status === 'working' || agent.status === 'delegating') return;
@@ -44,7 +40,6 @@ export function registerHandlers(io: Server, socket: Socket): void {
     io.to(`agent:${agentId}`).emit('agent:history', { agentId, history: [] });
   });
 
-  // Start a fresh conversation for every agent in a team
   socket.on('team:newConversation', ({ teamId }: { teamId: string }) => {
     const agents = agentService.getAgentsByTeam(teamId);
     for (const agent of agents) {
@@ -54,13 +49,12 @@ export function registerHandlers(io: Server, socket: Socket): void {
     }
   });
 
-  // List SDK sessions for an agent's workspace
-  socket.on('agent:listSessions', async ({ agentId }: { agentId: string }) => {
-    const sessions = await agentService.listAgentSessions(agentId);
-    socket.emit('agent:sessions', { agentId, sessions });
+  socket.on('agent:listSessions', ({ agentId }: { agentId: string }) => {
+    agentService.listAgentSessions(agentId)
+      .then((sessions) => socket.emit('agent:sessions', { agentId, sessions }))
+      .catch((err) => console.error(`[socket] agent:listSessions error for ${agentId}:`, err));
   });
 
-  // Move/swap agent rooms
   socket.on('agent:moveRoom', ({ agentId, targetRoomId }: { agentId: string; targetRoomId: string }) => {
     const moved = agentService.swapAgentRooms(agentId, targetRoomId);
     if (moved) {
@@ -68,12 +62,12 @@ export function registerHandlers(io: Server, socket: Socket): void {
     }
   });
 
-  // Resume a specific SDK session by sessionId
-  socket.on('agent:resumeSession', async ({ agentId, sessionId }: { agentId: string; sessionId: string }) => {
+  socket.on('agent:resumeSession', ({ agentId, sessionId }: { agentId: string; sessionId: string }) => {
     const agent = agentService.getAgent(agentId);
     if (!agent || agent.status === 'working' || agent.status === 'delegating') return;
     agentService.setAgentSession(agentId, sessionId);
-    const history = await agentService.getHistory(agentId);
-    io.to(`agent:${agentId}`).emit('agent:history', { agentId, history });
+    agentService.getHistory(agentId)
+      .then((history) => io.to(`agent:${agentId}`).emit('agent:history', { agentId, history }))
+      .catch((err) => console.error(`[socket] agent:resumeSession error for ${agentId}:`, err));
   });
 }

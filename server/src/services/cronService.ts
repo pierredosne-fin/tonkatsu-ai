@@ -26,7 +26,9 @@ function registerCronJob(schedule: CronSchedule, io: Server): void {
     }
     console.log(`[cronService] Firing schedule ${schedule.id} for agent ${agent.name}`);
     io.emit('agent:message', { agentId: agent.id, message: { role: 'user', content: schedule.message } });
-    setImmediate(() => runAgentTask(schedule.agentId, io, schedule.message));
+    runAgentTask(schedule.agentId, io, schedule.message).catch((err) =>
+      console.error(`[cronService] runAgentTask error for ${schedule.agentId}:`, err)
+    );
     schedule.lastFiredAt = new Date().toISOString();
     schedules.set(schedule.id, schedule);
     saveSchedules(Array.from(schedules.values()));

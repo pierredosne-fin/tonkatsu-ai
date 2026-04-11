@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useAgentStore } from '../store/agentStore';
 import { useSocketStore } from '../store/socketStore';
+import { useTemplateStore } from '../store/templateStore';
 import type { ConversationSession } from '../types';
 import { ScheduleModal } from './ScheduleModal';
 
@@ -32,8 +33,10 @@ export function ChatModal({ agentId, onClose, onDelete, onEdit }: Props) {
   const history = useAgentStore((s) => s.agentHistories.get(agentId) ?? []);
   const sessions = useAgentStore((s) => s.agentSessions.get(agentId) ?? []);
   const { subscribeToAgent, sendMessage, sleepAgent, newConversation, listSessions, resumeSession } = useSocketStore();
+  const createFromAgent = useTemplateStore((s) => s.createFromAgent);
 
   const [input, setInput] = useState('');
+  const [savedTemplate, setSavedTemplate] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null); // null = closed
   const [mentionIndex, setMentionIndex] = useState(0);
   const [resumeOpen, setResumeOpen] = useState(false);
@@ -176,6 +179,16 @@ export function ChatModal({ agentId, onClose, onDelete, onEdit }: Props) {
     newConversation(agentId);
   }
 
+  // ── Save as Template ─────────────────────────────────────────────────────
+
+  async function handleSaveAsTemplate() {
+    const result = await createFromAgent(agentId);
+    if (result) {
+      setSavedTemplate(true);
+      setTimeout(() => setSavedTemplate(false), 2000);
+    }
+  }
+
   // ── Delete ──────────────────────────────────────────────────────────────
 
   function handleDelete() {
@@ -239,6 +252,13 @@ export function ChatModal({ agentId, onClose, onDelete, onEdit }: Props) {
               title="Manage schedules"
             >
               ⏰
+            </button>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={handleSaveAsTemplate}
+              title="Save as template"
+            >
+              {savedTemplate ? '✓ Saved' : '⊞ Template'}
             </button>
             {onEdit && (
               <button className="btn btn-ghost btn-sm" onClick={() => onEdit(agentId)} title="Edit agent">✎</button>

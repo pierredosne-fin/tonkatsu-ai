@@ -57,6 +57,16 @@ export interface TeamTemplate {
   createdAt: string;
 }
 
+export interface SkillTemplate {
+  id: string;
+  name: string;
+  description: string;
+  content: string;
+  tags?: string[];
+  category?: string;
+  createdAt: string;
+}
+
 export interface CronSchedule {
   id: string;
   agentId: string;

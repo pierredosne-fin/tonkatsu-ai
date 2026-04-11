@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSocket } from './hooks/useSocket';
 import { useAgentStore } from './store/agentStore';
 import { useTemplateStore } from './store/templateStore';
+import { useSkillStore } from './store/skillStore';
 import { HUD } from './components/HUD';
 import { TeamTabs } from './components/TeamTabs';
 import { OfficeMap } from './components/OfficeMap';
@@ -23,6 +24,7 @@ export default function App() {
 
   useEffect(() => {
     useTemplateStore.getState().fetchAll();
+    useSkillStore.getState().fetchAll();
   }, []);
 
   const handleCreate = async (
@@ -30,12 +32,14 @@ export default function App() {
     mission: string,
     avatarColor: string,
     workspacePath?: string,
-    teamId?: string
+    teamId?: string,
+    agentTemplateId?: string,
+    canCreateAgents?: boolean
   ) => {
     const res = await fetch('/api/agents', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, mission, avatarColor, workspacePath, teamId }),
+      body: JSON.stringify({ name, mission, avatarColor, workspacePath, teamId, agentTemplateId, canCreateAgents }),
     });
     if (res.ok) {
       setShowCreate(false);

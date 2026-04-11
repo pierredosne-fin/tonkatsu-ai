@@ -30,7 +30,10 @@ export function AgentAvatar({ agent, onClick }: Props) {
           {STATUS_ICON[agent.status]}
         </span>
       </div>
-      <span className="agent-name">{agent.name}</span>
+      <div className="agent-name">
+        <span className="agent-name-text">{agent.name}</span>
+        {agent.worktreeOf && <span className="agent-worktree-badge" title={`Git worktree of ${agent.worktreeOf}`}>🌿</span>}
+      </div>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import Anthropic from '@anthropic-ai/sdk';
 import * as templateService from '../services/templateService.js';
 import * as agentService from '../services/agentService.js';
 import * as roomService from '../services/roomService.js';
@@ -118,6 +119,75 @@ export function createTemplatesRouter(io: Server) {
     if (!templateService.getAgentTemplate(req.params.id)) { res.status(404).json({ error: 'Not found' }); return; }
     try { fileService.deleteSkill(templateService.getAgentTemplateWorkspacePath(req.params.id), req.params.name); res.status(204).send(); }
     catch (e: unknown) { res.status(400).json({ error: e instanceof Error ? e.message : 'error' }); }
+  });
+
+  // ── Generate / improve CLAUDE.md for a template ─────────────────────────────
+
+  router.post('/agents/:id/generate-claude-md', async (req, res) => {
+    const t = templateService.getAgentTemplate(req.params.id);
+    if (!t) { res.status(404).json({ error: 'Not found' }); return; }
+    const { current } = req.body;
+    try {
+      const client = new Anthropic();
+      const isImproving = typeof current === 'string' && current.trim().length > 0;
+      const message = await client.messages.create({
+        model: 'claude-opus-4-6',
+        max_tokens: 2048,
+        system: `You are an expert at writing CLAUDE.md files — the custom system prompt for an AI agent running inside Claude Code.
+
+A CLAUDE.md is loaded into the agent's context and acts as its primary instructions. It should:
+- Be concise and actionable (the agent is smart, don't over-explain)
+- Define the agent's persona, working style, and specific domain expertise
+- Specify output formats, tools to prefer, and key constraints
+- Reference workspace files the agent should consult (SOUL.md, OPS.md, MEMORY.md, etc.)
+- Avoid generic LLM boilerplate — be specific to this agent's role
+
+Return ONLY the CLAUDE.md content, no preamble, no markdown code fences.`,
+        messages: [
+          {
+            role: 'user',
+            content: isImproving
+              ? `Improve this CLAUDE.md for an agent template named "${t.name}" with mission: "${t.mission}".
+
+Current CLAUDE.md:
+${current}
+
+Make it more effective: sharpen the instructions, remove vague filler, add missing domain-specific guidance. Keep what's good.`
+              : `Generate a CLAUDE.md for an agent template named "${t.name}".
+
+Mission: ${t.mission}
+
+Write tailored, concise instructions that will make this agent highly effective at its mission.`,
+          },
+        ],
+      });
+      const block = message.content[0];
+      if (block.type !== 'text') throw new Error('Unexpected response');
+      res.json({ content: block.text });
+    } catch (err) {
+      console.error('[templates] generate-claude-md error:', err);
+      res.status(500).json({ error: 'Generation failed' });
+    }
+  });
+
+  // ── Snapshot agent as template ──────────────────────────────────────────────
+
+  router.post('/agents/from-agent/:agentId', (req, res) => {
+    const agent = agentService.getAgent(req.params.agentId);
+    if (!agent) {
+      res.status(404).json({ error: 'Agent not found' });
+      return;
+    }
+    const template = templateService.createAgentTemplate({
+      name: agent.name,
+      mission: agent.mission,
+      avatarColor: agent.avatarColor,
+    });
+    fileService.snapshotWorkspace(
+      agent.workspacePath,
+      templateService.getAgentTemplateWorkspacePath(template.id),
+    );
+    res.status(201).json(template);
   });
 
   router.delete('/agents/:id', (req, res) => {

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAgentStore } from '../store/agentStore';
 import { useSocketStore } from '../store/socketStore';
 import { Room } from './Room';
-import type { Room as RoomType } from '../types';
+import type { Agent, Room as RoomType } from '../types';
 
 const GRID_COLS = 5;
 const GRID_ROWS = 2;
@@ -24,6 +24,13 @@ interface DelegationLine {
   color: string;
 }
 
+interface DragState {
+  agent: Agent;
+  sourceRoomId: string;
+  x: number;
+  y: number;
+}
+
 export function OfficeMap({ onAgentClick, onEmptyRoomClick }: Props) {
   const agents = useAgentStore((s) => s.agents);
   const currentTeamId = useAgentStore((s) => s.currentTeamId);
@@ -31,10 +38,22 @@ export function OfficeMap({ onAgentClick, onEmptyRoomClick }: Props) {
   const swapAgentRooms = useAgentStore((s) => s.swapAgentRooms);
   const moveAgentRoom = useSocketStore((s) => s.moveAgentRoom);
 
-  const [dragSourceRoomId, setDragSourceRoomId] = useState<string | null>(null);
-  const [dropTargetRoomId, setDropTargetRoomId] = useState<string | null>(null);
+  const handleRenameAgent = async (agentId: string, name: string) => {
+    await fetch(`/api/agents/${agentId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+  };
+
+  const [drag, setDrag] = useState<DragState | null>(null);
+  const [hoverRoomId, setHoverRoomId] = useState<string | null>(null);
   const [lines, setLines] = useState<DelegationLine[]>([]);
 
+  // Refs so event handlers always see the latest values without re-registering
+  const hoverRoomRef = useRef<string | null>(null);
+  const agentByRoomRef = useRef<Map<string, Agent>>(new Map());
+  const dragRef = useRef<DragState | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 
   const teamAgents = currentTeamId
@@ -42,12 +61,12 @@ export function OfficeMap({ onAgentClick, onEmptyRoomClick }: Props) {
     : agents;
 
   const agentByRoom = new Map(teamAgents.map((a) => [a.roomId, a]));
+  agentByRoomRef.current = agentByRoom;
+
+  // ── Delegation lines ──────────────────────────────────────────────────────
 
   const computeLines = useCallback(() => {
-    if (!gridRef.current || activeDelegations.size === 0) {
-      setLines([]);
-      return;
-    }
+    if (!gridRef.current || activeDelegations.size === 0) { setLines([]); return; }
     const gridRect = gridRef.current.getBoundingClientRect();
     const result: DelegationLine[] = [];
     for (const [fromAgentId, toAgentId] of activeDelegations.entries()) {
@@ -70,32 +89,63 @@ export function OfficeMap({ onAgentClick, onEmptyRoomClick }: Props) {
     setLines(result);
   }, [activeDelegations, teamAgents]);
 
-  useEffect(() => {
-    computeLines();
-  }, [computeLines]);
-
+  useEffect(() => { computeLines(); }, [computeLines]);
   useEffect(() => {
     window.addEventListener('resize', computeLines);
     return () => window.removeEventListener('resize', computeLines);
   }, [computeLines]);
 
-  const handleDragStart = (roomId: string) => setDragSourceRoomId(roomId);
+  // ── Custom mouse drag ─────────────────────────────────────────────────────
 
-  const handleDragEnd = () => {
-    setDragSourceRoomId(null);
-    setDropTargetRoomId(null);
-  };
+  const startDrag = useCallback((agent: Agent, sourceRoomId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    const state = { agent, sourceRoomId, x: e.clientX, y: e.clientY };
+    dragRef.current = state;
+    setDrag(state);
+    document.body.classList.add('is-dragging');
+  }, []);
 
-  const handleDrop = (targetRoomId: string) => {
-    if (!dragSourceRoomId || dragSourceRoomId === targetRoomId) return;
-    const dragAgent = agentByRoom.get(dragSourceRoomId);
-    if (!dragAgent) return;
-    const targetAgent = agentByRoom.get(targetRoomId) ?? null;
-    swapAgentRooms(dragAgent.id, targetAgent?.id ?? null, dragSourceRoomId, targetRoomId);
-    moveAgentRoom(dragAgent.id, targetRoomId);
-    setDragSourceRoomId(null);
-    setDropTargetRoomId(null);
-  };
+  useEffect(() => {
+    if (!drag) return;
+
+    const onMove = (e: MouseEvent) => {
+      const next = { ...dragRef.current!, x: e.clientX, y: e.clientY };
+      dragRef.current = next;
+      setDrag(next);
+
+      // Hide the ghost so elementFromPoint can see what's underneath
+      const ghostEl = document.querySelector('.drag-ghost') as HTMLElement | null;
+      if (ghostEl) ghostEl.style.display = 'none';
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      if (ghostEl) ghostEl.style.display = '';
+
+      const id = el?.closest('[data-room-id]')?.getAttribute('data-room-id') ?? null;
+      hoverRoomRef.current = id;
+      setHoverRoomId(id);
+    };
+
+    const onUp = () => {
+      const d = dragRef.current;
+      const hr = hoverRoomRef.current;
+      if (d && hr && hr !== d.sourceRoomId) {
+        const targetAgent = agentByRoomRef.current.get(hr) ?? null;
+        swapAgentRooms(d.agent.id, targetAgent?.id ?? null, d.sourceRoomId, hr);
+        moveAgentRoom(d.agent.id, hr);
+      }
+      dragRef.current = null;
+      hoverRoomRef.current = null;
+      setDrag(null);
+      setHoverRoomId(null);
+      document.body.classList.remove('is-dragging');
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [drag?.agent.id, swapAgentRooms, moveAgentRoom]);
 
   return (
     <div className="office-map">
@@ -107,28 +157,18 @@ export function OfficeMap({ onAgentClick, onEmptyRoomClick }: Props) {
             agent={agentByRoom.get(room.id)}
             onAgentClick={onAgentClick}
             onEmptyRoomClick={!agentByRoom.get(room.id) && onEmptyRoomClick ? () => onEmptyRoomClick(room.id) : undefined}
-            isDragging={dragSourceRoomId === room.id}
-            isDropTarget={dropTargetRoomId === room.id && dragSourceRoomId !== room.id}
-            onDragStart={() => handleDragStart(room.id)}
-            onDragEnd={handleDragEnd}
-            onDragEnter={() => setDropTargetRoomId(room.id)}
-            onDragLeave={() => setDropTargetRoomId((prev) => (prev === room.id ? null : prev))}
-            onDrop={() => handleDrop(room.id)}
+            isDragging={drag?.sourceRoomId === room.id}
+            isDropTarget={hoverRoomId === room.id && drag?.sourceRoomId !== room.id}
+            onMouseDown={(agent, e) => startDrag(agent, room.id, e)}
+            onRenameAgent={handleRenameAgent}
           />
         ))}
+
         {lines.length > 0 && (
           <svg className="office-delegation-svg" aria-hidden="true">
             <defs>
               {lines.map((line, i) => (
-                <marker
-                  key={i}
-                  id={`arrow-${i}`}
-                  markerWidth="6"
-                  markerHeight="6"
-                  refX="5"
-                  refY="3"
-                  orient="auto"
-                >
+                <marker key={i} id={`arrow-${i}`} markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
                   <path d="M0,0 L0,6 L6,3 z" fill={line.color} opacity="0.8" />
                 </marker>
               ))}
@@ -136,13 +176,9 @@ export function OfficeMap({ onAgentClick, onEmptyRoomClick }: Props) {
             {lines.map((line, i) => (
               <line
                 key={i}
-                x1={line.x1} y1={line.y1}
-                x2={line.x2} y2={line.y2}
-                stroke={line.color}
-                strokeWidth="2"
-                strokeDasharray="8 5"
-                strokeLinecap="round"
-                opacity="0.75"
+                x1={line.x1} y1={line.y1} x2={line.x2} y2={line.y2}
+                stroke={line.color} strokeWidth="2" strokeDasharray="8 5"
+                strokeLinecap="round" opacity="0.75"
                 markerEnd={`url(#arrow-${i})`}
                 className="delegation-dash-line"
               />
@@ -150,6 +186,21 @@ export function OfficeMap({ onAgentClick, onEmptyRoomClick }: Props) {
           </svg>
         )}
       </div>
+
+      {/* Floating drag ghost */}
+      {drag && (
+        <div
+          className="drag-ghost"
+          style={{
+            left: drag.x,
+            top: drag.y,
+            backgroundColor: drag.agent.avatarColor,
+          }}
+        >
+          <span className="drag-ghost-initial">{drag.agent.name.charAt(0).toUpperCase()}</span>
+          <span className="drag-ghost-name">{drag.agent.name}</span>
+        </div>
+      )}
     </div>
   );
 }

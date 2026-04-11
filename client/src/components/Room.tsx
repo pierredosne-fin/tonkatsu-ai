@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from 'react';
 import type { Room as RoomType, Agent } from '../types';
 import { AgentAvatar } from './AgentAvatar';
 
@@ -8,11 +9,8 @@ interface Props {
   onEmptyRoomClick?: () => void;
   isDragging?: boolean;
   isDropTarget?: boolean;
-  onDragStart: () => void;
-  onDragEnd: () => void;
-  onDragEnter: () => void;
-  onDragLeave: () => void;
-  onDrop: () => void;
+  onMouseDown: (agent: Agent, e: React.MouseEvent) => void;
+  onRenameAgent?: (agentId: string, name: string) => void;
 }
 
 export function Room({
@@ -22,12 +20,42 @@ export function Room({
   onEmptyRoomClick,
   isDragging,
   isDropTarget,
-  onDragStart,
-  onDragEnd,
-  onDragEnter,
-  onDragLeave,
-  onDrop,
+  onMouseDown,
+  onRenameAgent,
 }: Props) {
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+  const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleMouseEnter = () => {
+    if (agent) openTimer.current = setTimeout(() => onAgentClick(agent.id), 2000);
+  };
+
+  const handleMouseLeave = () => {
+    if (openTimer.current) { clearTimeout(openTimer.current); openTimer.current = null; }
+  };
+
+  useEffect(() => {
+    if (editing) inputRef.current?.select();
+  }, [editing]);
+
+  const startRename = () => {
+    if (!agent) return;
+    setEditName(agent.name);
+    setEditing(true);
+  };
+
+  const commitRename = () => {
+    const trimmed = editName.trim();
+    if (trimmed && trimmed !== agent?.name && agent) {
+      onRenameAgent?.(agent.id, trimmed);
+    }
+    setEditing(false);
+  };
+
+  const cancelRename = () => setEditing(false);
+
   const classNames = [
     'room',
     agent ? `room--occupied room--${agent.status}` : 'room--vacant',
@@ -43,21 +71,41 @@ export function Room({
       data-room-id={room.id}
       style={{ gridColumn: room.gridCol, gridRow: room.gridRow, cursor: !agent && onEmptyRoomClick ? 'pointer' : undefined }}
       onClick={!agent && onEmptyRoomClick ? onEmptyRoomClick : undefined}
-      onDragOver={(e) => e.preventDefault()}
-      onDragEnter={(e) => { e.preventDefault(); onDragEnter(); }}
-      onDragLeave={onDragLeave}
-      onDrop={(e) => { e.preventDefault(); onDrop(); }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       <div className="room-label">
-        {agent ? agent.name : `Office ${room.id.replace('room-', '')}`}
+        {agent ? (
+          editing ? (
+            <input
+              ref={inputRef}
+              className="room-label-rename-input"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitRename();
+                else if (e.key === 'Escape') cancelRename();
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <span
+              onDoubleClick={(e) => { e.stopPropagation(); startRename(); }}
+              title="Double-click to rename"
+            >
+              {agent.name}
+            </span>
+          )
+        ) : (
+          `Office ${room.id.replace('room-', '')}`
+        )}
       </div>
       <div className="room-content">
         {agent ? (
           <div
-            draggable
             className="room-draggable"
-            onDragStart={(e) => { e.stopPropagation(); onDragStart(); }}
-            onDragEnd={onDragEnd}
+            onMouseDown={(e) => onMouseDown(agent, e)}
           >
             <AgentAvatar agent={agent} onClick={() => onAgentClick(agent.id)} />
           </div>

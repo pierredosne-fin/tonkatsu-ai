@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTemplateStore } from '../store/templateStore';
+import { useSkillStore } from '../store/skillStore';
 import type { AgentTemplate } from '../types';
 
 const PRESET_COLORS = [
@@ -37,15 +38,20 @@ export function CreateAgentTemplateModal({ onClose, onCreated, editTemplate }: P
   const [mission, setMission] = useState(editTemplate?.mission ?? '');
   const [color, setColor] = useState(editTemplate?.avatarColor ?? PRESET_COLORS[0]);
   const [loading, setLoading] = useState(false);
+  const [generatingMission, setGeneratingMission] = useState(false);
 
   const [files, setFiles] = useState<WorkspaceFiles | null>(null);
   const [filesLoading, setFilesLoading] = useState(false);
   const [claudeMd, setClaudeMd] = useState('');
+  const [generatingClaudeMd, setGeneratingClaudeMd] = useState(false);
   const [settingsJson, setSettingsJson] = useState('');
   const [editingFile, setEditingFile] = useState<{ type: 'command' | 'rule' | 'skill'; name: string; content: string } | null>(null);
   const [newFileName, setNewFileName] = useState('');
   const [savingFile, setSavingFile] = useState(false);
   const [fileError, setFileError] = useState('');
+  const [showLibraryPicker, setShowLibraryPicker] = useState(false);
+  const [addingFromLibrary, setAddingFromLibrary] = useState<string | null>(null);
+  const librarySkills = useSkillStore((s) => s.skills);
 
   useEffect(() => {
     if (!isEdit || !editTemplate) return;
@@ -76,6 +82,39 @@ export function CreateAgentTemplateModal({ onClose, onCreated, editTemplate }: P
 
   const baseUrl = isEdit ? `/api/templates/agents/${editTemplate!.id}` : '';
 
+  const generateMission = async () => {
+    if (!name.trim()) return;
+    setGeneratingMission(true);
+    const res = await fetch('/api/agents/generate-mission', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name.trim(), current: mission }),
+    });
+    setGeneratingMission(false);
+    if (res.ok) {
+      const { mission: generated } = await res.json();
+      setMission(generated);
+    }
+  };
+
+  const generateClaudeMd = async () => {
+    if (!isEdit) return;
+    setGeneratingClaudeMd(true);
+    setFileError('');
+    const res = await fetch(`/api/templates/agents/${editTemplate!.id}/generate-claude-md`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ current: claudeMd }),
+    });
+    setGeneratingClaudeMd(false);
+    if (res.ok) {
+      const { content } = await res.json();
+      setClaudeMd(content);
+    } else {
+      setFileError('Generation failed');
+    }
+  };
+
   const saveClaudeMd = async () => {
     setSavingFile(true); setFileError('');
     const res = await fetch(`${baseUrl}/files/claude-md`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: claudeMd }) });
@@ -103,6 +142,19 @@ export function CreateAgentTemplateModal({ onClose, onCreated, editTemplate }: P
     if (!res.ok) { setFileError('Failed to save'); return; }
     await refreshFiles();
     setEditingFile(null); setNewFileName('');
+  };
+
+  const addFromLibrary = async (skillId: string, skillName: string, skillContent: string) => {
+    if (!isEdit) return;
+    setAddingFromLibrary(skillId);
+    await fetch(`${baseUrl}/files/skills/${encodeURIComponent(skillName)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: skillContent }),
+    });
+    await refreshFiles();
+    setAddingFromLibrary(null);
+    setShowLibraryPicker(false);
   };
 
   const deleteFile = async (type: 'command' | 'rule' | 'skill', name: string) => {
@@ -188,7 +240,13 @@ export function CreateAgentTemplateModal({ onClose, onCreated, editTemplate }: P
               <input id="tpl-name" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. CEO, Data Analyst" maxLength={50} required autoFocus />
             </div>
             <div className="form-group">
-              <label htmlFor="tpl-mission">Mission</label>
+              <div className="form-label-row">
+                <label htmlFor="tpl-mission">Mission</label>
+                <button type="button" className="btn btn-ghost btn-sm"
+                  onClick={generateMission} disabled={generatingMission || !name.trim()}>
+                  {generatingMission ? 'Generating…' : mission.trim() ? '✦ Improve' : '✦ Generate'}
+                </button>
+              </div>
               <textarea id="tpl-mission" value={mission} onChange={(e) => setMission(e.target.value)} placeholder="Describe what this agent role should do..." rows={4} maxLength={1000} required />
             </div>
             <div className="form-group">
@@ -212,6 +270,17 @@ export function CreateAgentTemplateModal({ onClose, onCreated, editTemplate }: P
           <div className="modal-body modal-body--file">
             {filesLoading ? <div className="file-loading">Loading…</div> : (
               <>
+                <div className="file-editor-header">
+                  <span className="file-editor-title">CLAUDE.md</span>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={generateClaudeMd}
+                    disabled={generatingClaudeMd}
+                  >
+                    {generatingClaudeMd ? 'Generating…' : claudeMd.trim() ? '✦ Improve' : '✦ Generate'}
+                  </button>
+                </div>
                 <textarea className="file-editor" value={claudeMd} onChange={(e) => setClaudeMd(e.target.value)} placeholder="# Agent Instructions&#10;&#10;Write your CLAUDE.md here…" spellCheck={false} />
                 {fileError && <div className="file-error">{fileError}</div>}
                 <div className="modal-footer">
@@ -225,7 +294,78 @@ export function CreateAgentTemplateModal({ onClose, onCreated, editTemplate }: P
 
         {tab === 'commands' && renderFileListTab('command', files?.commands, '⚡', 'No commands yet.', 'command-name', (n) => `# ${n}\n\n`)}
         {tab === 'rules' && renderFileListTab('rule', files?.rules, '📋', 'No rules yet.', 'category/rule-name', () => '')}
-        {tab === 'skills' && renderFileListTab('skill', files?.skills, '🛠', 'No skills yet.', 'skill-name', (n) => `---\nname: ${n}\ndescription: \n---\n\n# ${n}\n\n`)}
+        {tab === 'skills' && (
+          <div className="modal-body">
+            {filesLoading ? <div className="file-loading">Loading…</div> : editingFile ? (
+              <>
+                <div className="file-editor-header">
+                  <span className="file-editor-title">{editingFile.name}/SKILL.md</span>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setEditingFile(null)}>← Back</button>
+                </div>
+                <textarea className="file-editor" value={editingFile.content} onChange={(e) => setEditingFile({ ...editingFile, content: e.target.value })} spellCheck={false} autoFocus />
+                {fileError && <div className="file-error">{fileError}</div>}
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-ghost" onClick={() => setEditingFile(null)}>Cancel</button>
+                  <button type="button" className="btn btn-primary" disabled={savingFile} onClick={() => saveFile('skill', editingFile.name, editingFile.content)}>{savingFile ? 'Saving…' : 'Save'}</button>
+                </div>
+              </>
+            ) : (
+              <>
+                {showLibraryPicker && librarySkills.length > 0 && (
+                  <div className="skill-library-picker">
+                    <div className="skill-library-picker-header">
+                      <span>Pick from library</span>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setShowLibraryPicker(false)}>✕</button>
+                    </div>
+                    {librarySkills
+                      .filter((ls) => !files?.skills.some((s) => s.name === ls.name))
+                      .map((ls) => (
+                        <div key={ls.id} className="file-row">
+                          <span className="file-icon">🛠</span>
+                          <span className="file-name">{ls.name}</span>
+                          {ls.description && <span className="templates-agent-count">{ls.description.slice(0, 40)}</span>}
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            disabled={addingFromLibrary === ls.id}
+                            onClick={() => addFromLibrary(ls.id, ls.name, ls.content)}
+                          >
+                            {addingFromLibrary === ls.id ? '…' : '+ Add'}
+                          </button>
+                        </div>
+                      ))}
+                    {librarySkills.filter((ls) => !files?.skills.some((s) => s.name === ls.name)).length === 0 && (
+                      <div className="file-empty">All library skills already added.</div>
+                    )}
+                  </div>
+                )}
+                <div className="file-list">
+                  {files?.skills.length === 0 && <div className="file-empty">No skills yet.</div>}
+                  {files?.skills.map((f) => (
+                    <div key={f.name} className="file-row">
+                      <span className="file-icon">🛠</span>
+                      <span className="file-name">{f.name}</span>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setEditingFile({ type: 'skill', name: f.name, content: f.content })}>✎ Edit</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => deleteFile('skill', f.name)}>✕</button>
+                    </div>
+                  ))}
+                </div>
+                <div className="file-new-row">
+                  <input className="file-new-input" value={newFileName} onChange={(e) => setNewFileName(e.target.value)} placeholder="skill-name" spellCheck={false} />
+                  <button className="btn btn-ghost btn-sm" disabled={!newFileName.trim()}
+                    onClick={() => { const n = newFileName.trim(); setEditingFile({ type: 'skill', name: n, content: `---\nname: ${n}\ndescription: \n---\n\n# ${n}\n\n` }); setNewFileName(''); }}>
+                    + New
+                  </button>
+                  {librarySkills.length > 0 && (
+                    <button className="btn btn-ghost btn-sm" onClick={() => setShowLibraryPicker((v) => !v)}>
+                      From Library
+                    </button>
+                  )}
+                </div>
+                <div className="modal-footer"><button type="button" className="btn btn-ghost" onClick={onClose}>Close</button></div>
+              </>
+            )}
+          </div>
+        )}
 
         {tab === 'settings' && (
           <div className="modal-body modal-body--file">

@@ -1,10 +1,122 @@
 import { useState } from 'react';
 import { useTemplateStore } from '../store/templateStore';
+import { useSkillStore } from '../store/skillStore';
 import { CreateAgentTemplateModal } from './CreateAgentTemplateModal';
 import { CreateTeamTemplateModal } from './CreateTeamTemplateModal';
+import type { SkillTemplate } from '../types';
 
 interface Props {
   onClose: () => void;
+}
+
+function SkillEditor({
+  skill,
+  onSave,
+  onClose,
+}: {
+  skill?: SkillTemplate;
+  onSave: (params: { name: string; description: string; content: string }) => Promise<void>;
+  onClose: () => void;
+}) {
+  const generateContent = useSkillStore((s) => s.generateContent);
+  const [name, setName] = useState(skill?.name ?? '');
+  const [description, setDescription] = useState(skill?.description ?? '');
+  const [content, setContent] = useState(skill?.content ?? '');
+  const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleGenerate = async () => {
+    if (!name.trim() || !description.trim()) {
+      setError('Fill in name and description first');
+      return;
+    }
+    setGenerating(true);
+    setError('');
+    const generated = await generateContent(name.trim(), description.trim());
+    setGenerating(false);
+    if (generated) {
+      setContent(generated);
+    } else {
+      setError('Generation failed');
+    }
+  };
+
+  const handleSave = async () => {
+    if (!name.trim() || !description.trim() || !content.trim()) return;
+    setSaving(true);
+    setError('');
+    try {
+      await onSave({ name: name.trim(), description: description.trim(), content: content.trim() });
+    } catch {
+      setError('Save failed');
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div className="skill-editor-overlay" onClick={onClose}>
+      <div className="skill-editor-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>{skill ? `Edit · ${skill.name}` : 'New Skill'}</h2>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          <div className="form-group">
+            <label>Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="skill-name (alphanumeric, hyphens)"
+              disabled={!!skill}
+            />
+          </div>
+          <div className="form-group">
+            <label>Description</label>
+            <input
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="What does this skill do?"
+            />
+          </div>
+          <div className="form-group">
+            <div className="skill-content-header">
+              <label>SKILL.md</label>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={handleGenerate}
+                disabled={generating || !name.trim() || !description.trim()}
+              >
+                {generating ? 'Generating…' : '✦ Generate'}
+              </button>
+            </div>
+            <textarea
+              className="file-editor"
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              placeholder="---&#10;name: my-skill&#10;description: …&#10;---&#10;&#10;# My Skill&#10;&#10;Instructions…"
+              spellCheck={false}
+            />
+          </div>
+          {error && <div className="file-error">{error}</div>}
+        </div>
+        <div className="modal-footer">
+          <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={handleSave}
+            disabled={saving || !name.trim() || !description.trim() || !content.trim()}
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function TemplatesPanel({ onClose }: Props) {
@@ -13,6 +125,11 @@ export function TemplatesPanel({ onClose }: Props) {
   const deleteAgentTemplate = useTemplateStore((s) => s.deleteAgentTemplate);
   const deleteTeamTemplate = useTemplateStore((s) => s.deleteTeamTemplate);
 
+  const skills = useSkillStore((s) => s.skills);
+  const createSkill = useSkillStore((s) => s.createSkill);
+  const updateSkill = useSkillStore((s) => s.updateSkill);
+  const deleteSkill = useSkillStore((s) => s.deleteSkill);
+
   const [showCreateAgent, setShowCreateAgent] = useState(false);
   const [showCreateTeam, setShowCreateTeam] = useState(false);
   const [editAgentTemplateId, setEditAgentTemplateId] = useState<string | null>(null);
@@ -20,6 +137,9 @@ export function TemplatesPanel({ onClose }: Props) {
   const [spawningId, setSpawningId] = useState<string | null>(null);
   const [spawnName, setSpawnName] = useState('');
   const [spawning, setSpawning] = useState(false);
+
+  const [showNewSkill, setShowNewSkill] = useState(false);
+  const [editSkillId, setEditSkillId] = useState<string | null>(null);
 
   const handleSpawnStart = (templateId: string, templateName: string) => {
     setSpawningId(templateId);
@@ -39,6 +159,18 @@ export function TemplatesPanel({ onClose }: Props) {
     setSpawnName('');
   };
 
+  const handleCreateSkill = async (params: { name: string; description: string; content: string }) => {
+    await createSkill(params);
+    setShowNewSkill(false);
+  };
+
+  const handleUpdateSkill = async (id: string, params: { name: string; description: string; content: string }) => {
+    await updateSkill(id, params);
+    setEditSkillId(null);
+  };
+
+  const editingSkill = editSkillId ? skills.find((s) => s.id === editSkillId) : undefined;
+
   return (
     <>
       <div className="templates-panel-overlay" onClick={onClose} />
@@ -49,6 +181,41 @@ export function TemplatesPanel({ onClose }: Props) {
         </div>
 
         <div className="templates-panel-body">
+          {/* Skill Library */}
+          <div className="templates-section">
+            <div className="templates-section-title">
+              <span>Skill Library</span>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowNewSkill(true)}>
+                + New
+              </button>
+            </div>
+            {skills.length === 0 ? (
+              <p className="templates-empty">No skills yet. Create one to reuse across agents.</p>
+            ) : (
+              skills.map((s) => (
+                <div key={s.id} className="template-row">
+                  <span className="file-icon">🛠</span>
+                  <span className="template-name">{s.name}</span>
+                  {s.description && (
+                    <span className="templates-agent-count" title={s.description}>
+                      {s.description.slice(0, 30)}{s.description.length > 30 ? '…' : ''}
+                    </span>
+                  )}
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setEditSkillId(s.id)}
+                    title="Edit skill"
+                  >✎</button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => deleteSkill(s.id)}
+                    title="Delete skill"
+                  >✕</button>
+                </div>
+              ))
+            )}
+          </div>
+
           {/* Agent Templates */}
           <div className="templates-section">
             <div className="templates-section-title">
@@ -148,6 +315,19 @@ export function TemplatesPanel({ onClose }: Props) {
         </div>
       </div>
 
+      {showNewSkill && (
+        <SkillEditor
+          onSave={handleCreateSkill}
+          onClose={() => setShowNewSkill(false)}
+        />
+      )}
+      {editSkillId && editingSkill && (
+        <SkillEditor
+          skill={editingSkill}
+          onSave={(params) => handleUpdateSkill(editSkillId, params)}
+          onClose={() => setEditSkillId(null)}
+        />
+      )}
       {showCreateAgent && (
         <CreateAgentTemplateModal
           onClose={() => setShowCreateAgent(false)}

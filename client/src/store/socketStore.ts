@@ -67,7 +67,7 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
   connect: () => {
     if (get().socket) return;
 
-    const socket = io({ path: '/socket.io' });
+    const socket = io('http://localhost:3001', { transports: ['websocket'] });
 
     socket.on('connect', () => set({ connected: true }));
     socket.on('disconnect', () => set({ connected: false }));

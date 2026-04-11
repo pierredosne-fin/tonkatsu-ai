@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import type { Agent, AgentTemplate, TeamTemplate, CronSchedule } from '../models/types.js';
+import type { Agent, AgentTemplate, TeamTemplate, CronSchedule, SkillTemplate } from '../models/types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const WORKSPACES_DIR = join(__dirname, '../../../workspaces');
@@ -18,7 +18,6 @@ export function teamDisplayName(teamId: string): string {
 }
 
 function teamRuntimePath(teamId: string): string {
-  if (teamId === DEFAULT_TEAM) return join(WORKSPACES_DIR, 'agents.json');
   return join(WORKSPACES_DIR, teamId, 'agents.json');
 }
 
@@ -29,15 +28,7 @@ export function getTeamIds(): string[] {
     const entries = readdirSync(WORKSPACES_DIR, { withFileTypes: true });
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      const dir = join(WORKSPACES_DIR, entry.name);
-      const subEntries = readdirSync(dir, { withFileTypes: true });
-      const isTeam = subEntries.some((sub) => {
-        if (!sub.isDirectory()) return false;
-        return existsSync(join(dir, sub.name, 'agent.json'));
-      });
-      const hasAgentsJson = existsSync(join(dir, 'agents.json'));
-      const hasDirectAgentJson = existsSync(join(dir, 'agent.json'));
-      if ((isTeam || hasAgentsJson) && !hasDirectAgentJson) {
+      if (existsSync(join(WORKSPACES_DIR, entry.name, 'agents.json'))) {
         ids.add(entry.name);
       }
     }
@@ -45,83 +36,6 @@ export function getTeamIds(): string[] {
     console.warn('[persistence] Failed to scan teams:', err);
   }
   return Array.from(ids);
-}
-
-// ── Agent config (agent.json per workspace) ──────────────────────────────────
-
-export interface AgentConfig {
-  name: string;
-  mission: string;
-  avatarColor: string;
-  workspacePath?: string;
-}
-
-export function writeAgentConfig(configDir: string, config: AgentConfig): void {
-  mkdirSync(configDir, { recursive: true });
-  try {
-    writeFileSync(join(configDir, 'agent.json'), JSON.stringify({
-      name: config.name,
-      mission: config.mission,
-      avatarColor: config.avatarColor,
-    }, null, 2), 'utf-8');
-  } catch (err) {
-    console.warn('[persistence] Failed to write agent.json:', err);
-  }
-}
-
-export function readAgentConfig(dir: string): AgentConfig | null {
-  const p = join(dir, 'agent.json');
-  if (!existsSync(p)) return null;
-  try {
-    return JSON.parse(readFileSync(p, 'utf-8')) as AgentConfig;
-  } catch { return null; }
-}
-
-// ── Scan workspaces for agent.json files ─────────────────────────────────────
-
-export interface DiscoveredWorkspace {
-  teamId: string;
-  configDir: string;
-  workspacePath: string;
-  config: AgentConfig;
-}
-
-export function scanAllWorkspaceAgents(): DiscoveredWorkspace[] {
-  if (!existsSync(WORKSPACES_DIR)) return [];
-  const discovered: DiscoveredWorkspace[] = [];
-  try {
-    const entries = readdirSync(WORKSPACES_DIR, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      const dir = join(WORKSPACES_DIR, entry.name);
-
-      const directConfig = readAgentConfig(dir);
-      if (directConfig) {
-        discovered.push({ teamId: DEFAULT_TEAM, configDir: dir, workspacePath: dir, config: directConfig });
-        continue;
-      }
-
-      try {
-        const subEntries = readdirSync(dir, { withFileTypes: true });
-        for (const sub of subEntries) {
-          if (!sub.isDirectory()) continue;
-          const subDir = join(dir, sub.name);
-          const config = readAgentConfig(subDir);
-          if (config) {
-            discovered.push({
-              teamId: entry.name,
-              configDir: subDir,
-              workspacePath: config.workspacePath ?? subDir,
-              config,
-            });
-          }
-        }
-      } catch { /* skip unreadable dirs */ }
-    }
-  } catch (err) {
-    console.warn('[persistence] Failed to scan workspaces:', err);
-  }
-  return discovered;
 }
 
 // ── Runtime state (agents.json per team) ─────────────────────────────────────
@@ -215,6 +129,29 @@ export function saveSchedules(schedules: CronSchedule[]): void {
     writeFileSync(SCHEDULES_PATH(), JSON.stringify(schedules, null, 2), 'utf-8');
   } catch (err) {
     console.warn('[persistence] Failed to save schedules:', err);
+  }
+}
+
+// ── Skill Library (skills.json at workspace root) ─────────────────────────────
+
+const SKILLS_PATH = () => join(WORKSPACES_DIR, 'skills.json');
+
+export function loadSkills(): SkillTemplate[] {
+  const p = SKILLS_PATH();
+  if (!existsSync(p)) return [];
+  try {
+    return JSON.parse(readFileSync(p, 'utf-8')) as SkillTemplate[];
+  } catch {
+    return [];
+  }
+}
+
+export function saveSkills(skills: SkillTemplate[]): void {
+  try {
+    mkdirSync(WORKSPACES_DIR, { recursive: true });
+    writeFileSync(SKILLS_PATH(), JSON.stringify(skills, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('[persistence] Failed to save skills:', err);
   }
 }
 

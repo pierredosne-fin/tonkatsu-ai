@@ -3,8 +3,10 @@ import { z } from 'zod';
 import * as agentService from '../services/agentService.js';
 import * as roomService from '../services/roomService.js';
 import * as fileService from '../services/fileService.js';
+import * as templateService from '../services/templateService.js';
 import { runAgentTask } from '../services/claudeService.js';
 import { deleteSchedulesForAgent } from '../services/cronService.js';
+import Anthropic from '@anthropic-ai/sdk';
 import type { Server } from 'socket.io';
 
 export function createAgentRouter(io: Server) {
@@ -20,6 +22,8 @@ export function createAgentRouter(io: Server) {
     avatarColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
     teamId: z.string().optional(),
     workspacePath: z.string().optional(),
+    agentTemplateId: z.string().uuid().optional(),
+    canCreateAgents: z.boolean().optional(),
   });
 
   router.post('/', (req, res) => {
@@ -42,13 +46,42 @@ export function createAgentRouter(io: Server) {
       return;
     }
 
+    if (result.data.agentTemplateId) {
+      fileService.copyWorkspaceFiles(
+        templateService.getAgentTemplateWorkspacePath(result.data.agentTemplateId),
+        agent.workspacePath,
+      );
+    }
+
     io.emit('agent:created', agentService.toClientAgent(agent));
     io.emit('team:list', agentService.getTeamList());
     res.status(201).json(agentService.toClientAgent(agent));
+  });
 
-    setImmediate(() => {
-      runAgentTask(agent.id, io);
-    });
+  router.post('/generate-mission', async (req, res) => {
+    const { name, current } = req.body;
+    if (!name?.trim()) { res.status(400).json({ error: 'name required' }); return; }
+    try {
+      const client = new Anthropic();
+      const isImproving = typeof current === 'string' && current.trim().length > 0;
+      const message = await client.messages.create({
+        model: 'claude-opus-4-6',
+        max_tokens: 300,
+        system: `You write concise, specific mission statements for AI agents. A mission is 1-3 sentences max. It should be precise, actionable, and scoped — not vague. Write in the imperative form. Return ONLY the mission text, nothing else.`,
+        messages: [{
+          role: 'user',
+          content: isImproving
+            ? `Improve this mission for an agent named "${name.trim()}":\n\n${current}\n\nMake it sharper, more specific, and more actionable.`
+            : `Write a mission for an AI agent named "${name.trim()}".`,
+        }],
+      });
+      const block = message.content[0];
+      if (block.type !== 'text') throw new Error('Unexpected response');
+      res.json({ mission: block.text.trim() });
+    } catch (err) {
+      console.error('[agents] generate-mission error:', err);
+      res.status(500).json({ error: 'Generation failed' });
+    }
   });
 
   router.post('/:id/trigger', (req, res) => {
@@ -65,7 +98,9 @@ export function createAgentRouter(io: Server) {
     if (message) {
       io.emit('agent:message', { agentId: agent.id, message: { role: 'user', content: message } });
     }
-    setImmediate(() => runAgentTask(agent.id, io, message ?? undefined));
+    runAgentTask(agent.id, io, message ?? undefined).catch((err) =>
+      console.error(`[trigger] runAgentTask error for ${agent.id}:`, err)
+    );
     res.status(202).json({ agentId: agent.id, name: agent.name, teamId: agent.teamId });
   });
 
@@ -193,6 +228,53 @@ export function createAgentRouter(io: Server) {
     }
   });
 
+  router.post('/:id/generate-claude-md', async (req, res) => {
+    const agent = agentService.getAgent(req.params.id);
+    if (!agent) { res.status(404).json({ error: 'Agent not found' }); return; }
+    const { current } = req.body;
+    try {
+      const client = new Anthropic();
+      const isImproving = typeof current === 'string' && current.trim().length > 0;
+      const message = await client.messages.create({
+        model: 'claude-opus-4-6',
+        max_tokens: 2048,
+        system: `You are an expert at writing CLAUDE.md files — the custom system prompt for an AI agent running inside Claude Code.
+
+A CLAUDE.md is loaded into the agent's context and acts as its primary instructions. It should:
+- Be concise and actionable (the agent is smart, don't over-explain)
+- Define the agent's persona, working style, and specific domain expertise
+- Specify output formats, tools to prefer, and key constraints
+- Reference workspace files the agent should consult (SOUL.md, OPS.md, MEMORY.md, etc.)
+- Avoid generic LLM boilerplate — be specific to this agent's role
+
+Return ONLY the CLAUDE.md content, no preamble, no markdown code fences.`,
+        messages: [
+          {
+            role: 'user',
+            content: isImproving
+              ? `Improve this CLAUDE.md for an agent named "${agent.name}" with mission: "${agent.mission}".
+
+Current CLAUDE.md:
+${current}
+
+Make it more effective: sharpen the instructions, remove vague filler, add missing domain-specific guidance. Keep what's good.`
+              : `Generate a CLAUDE.md for an agent named "${agent.name}".
+
+Mission: ${agent.mission}
+
+Write tailored, concise instructions that will make this agent highly effective at its mission.`,
+          },
+        ],
+      });
+      const block = message.content[0];
+      if (block.type !== 'text') throw new Error('Unexpected response');
+      res.json({ content: block.text });
+    } catch (err) {
+      console.error('[agents] generate-claude-md error:', err);
+      res.status(500).json({ error: 'Generation failed' });
+    }
+  });
+
   router.delete('/:id', (req, res) => {
     const deleted = agentService.deleteAgent(req.params.id);
     if (!deleted) {
@@ -211,10 +293,48 @@ export function createAgentRouter(io: Server) {
 export function createTeamsRouter(io: Server) {
   const router = Router();
 
+  router.patch('/:teamId', (req, res) => {
+    const { name } = req.body;
+    if (typeof name !== 'string' || !name.trim()) {
+      res.status(400).json({ error: 'name required' });
+      return;
+    }
+    const newTeamId = name.trim().toLowerCase().replace(/\s+/g, '-');
+    if (newTeamId === req.params.teamId) { res.json({ ok: true }); return; }
+    agentService.renameTeam(req.params.teamId, newTeamId);
+    io.emit('team:list', agentService.getTeamList());
+    res.json({ ok: true, newTeamId });
+  });
+
+  router.post('/:teamId/save-as-template', (req, res) => {
+    const teamAgents = agentService.getAgentsByTeam(req.params.teamId);
+    if (teamAgents.length === 0) {
+      res.status(400).json({ error: 'Team has no agents' });
+      return;
+    }
+    const team = agentService.getTeamList().find((t) => t.id === req.params.teamId);
+    const agentTemplateIds: string[] = [];
+    for (const agent of teamAgents) {
+      const tmpl = templateService.createAgentTemplate({
+        name: agent.name,
+        mission: agent.mission,
+        avatarColor: agent.avatarColor,
+      });
+      fileService.snapshotWorkspace(agent.workspacePath, templateService.getAgentTemplateWorkspacePath(tmpl.id));
+      agentTemplateIds.push(tmpl.id);
+    }
+    const teamTemplate = templateService.createTeamTemplate({
+      name: team?.name ?? req.params.teamId,
+      agentTemplateIds,
+    });
+    res.status(201).json(teamTemplate);
+  });
+
   router.delete('/:teamId', (req, res) => {
     const { teamId } = req.params;
     const deletedIds = agentService.deleteTeam(teamId);
     for (const agentId of deletedIds) {
+      deleteSchedulesForAgent(agentId);
       io.emit('agent:deleted', { agentId });
     }
     io.emit('team:list', agentService.getTeamList());

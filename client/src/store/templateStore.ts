@@ -6,6 +6,7 @@ interface TemplateStore {
   teamTemplates: TeamTemplate[];
   fetchAll: () => Promise<void>;
   createAgentTemplate: (params: { name: string; mission: string; avatarColor: string }) => Promise<AgentTemplate | null>;
+  createFromAgent: (agentId: string) => Promise<AgentTemplate | null>;
   updateAgentTemplate: (id: string, params: { name: string; mission: string; avatarColor: string }) => Promise<AgentTemplate | null>;
   createTeamTemplate: (params: { name: string; agentTemplateIds: string[] }) => Promise<TeamTemplate | null>;
   updateTeamTemplate: (id: string, params: { name?: string; agentTemplateIds?: string[] }) => Promise<TeamTemplate | null>;
@@ -29,6 +30,14 @@ export const useTemplateStore = create<TemplateStore>((set, get) => ({
       ]);
       set({ agentTemplates, teamTemplates });
     }
+  },
+
+  createFromAgent: async (agentId) => {
+    const res = await fetch(`/api/templates/agents/from-agent/${agentId}`, { method: 'POST' });
+    if (!res.ok) return null;
+    const template: AgentTemplate = await res.json();
+    await get().fetchAll();
+    return template;
   },
 
   createAgentTemplate: async (params) => {

@@ -16,7 +16,7 @@ function buildSystemPromptAppend(
   mission: string,
   teamId: string,
   otherAgents: { name: string; mission: string }[],
-  canCreateAgents: boolean
+  canCreateAgents: boolean,
 ): string {
   const agentList =
     otherAgents.length > 0
@@ -34,10 +34,16 @@ function buildSystemPromptAppend(
 Work on your mission step by step.
 Be terse. No preamble, no summaries, no explaining what you're about to do — just act and give brief status when done.
 
-FILE ACCESS:
-- You have read-only access by default.
-- To save output, write files to your outputs/ directory (inside your workspace).
-- Do not write files anywhere else unless explicitly permitted.
+WORKSPACE STRUCTURE:
+- SOUL.md     — your identity and principles
+- USER.md     — context about the human operator
+- OPS.md      — your operational playbook
+- MEMORY.md   — curated long-term memory (keep concise, update regularly)
+- TOOLS.md    — environment notes, tools, endpoints
+- memory/     — append-only daily logs (memory/YYYY-MM-DD.md) and project docs (memory/projects/)
+
+Before starting any task: read MEMORY.md and today's log in memory/.
+After completing work: append key learnings to today's log and update MEMORY.md if needed.
 
 IMPORTANT PROTOCOL:
 - If you need information or a decision from the user to proceed, end your final text response with:
