@@ -55,6 +55,19 @@ export function initSchedules(io: Server): void {
   console.log(`[cronService] Loaded ${loaded.length} schedule(s)`);
 }
 
+export function reloadSchedules(io: Server): void {
+  // Stop and clear all existing tasks
+  for (const [id] of tasks) stopTask(id);
+  schedules.clear();
+  // Re-load from disk and re-register
+  const loaded = loadSchedules();
+  for (const s of loaded) {
+    schedules.set(s.id, s);
+    if (s.enabled) registerCronJob(s, io);
+  }
+  console.log(`[cronService] Reloaded ${loaded.length} schedule(s)`);
+}
+
 export function getAllSchedules(): CronSchedule[] {
   return Array.from(schedules.values());
 }

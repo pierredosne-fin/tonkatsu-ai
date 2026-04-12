@@ -1,5 +1,15 @@
 export type AgentStatus = 'sleeping' | 'working' | 'pending' | 'delegating';
 
+export interface GitSync {
+  remoteUrl: string;
+  branch: string;
+  authMethod: 'ssh' | 'system';
+  sshKeyName?: string;       // filename in workspaces/.ssh/ — no secret content stored here
+  lastSyncAt?: string;
+  lastSyncStatus?: 'ok' | 'error';
+  lastSyncError?: string;
+}
+
 export interface Message {
   role: 'user' | 'assistant';
   content: string;
@@ -23,6 +33,7 @@ export interface Agent {
   sessionId?: string;  // Claude Code Agent SDK session ID for conversation continuity
   canCreateAgents?: boolean;
   pendingQuestion?: string;
+  gitSync?: GitSync;
   lastActivity: Date;
   createdAt: Date;
 }
@@ -39,7 +50,7 @@ export interface AgentTemplate {
   name: string;
   mission: string;
   avatarColor: string;
-  workspacePath?: string; // git repo path — a worktree is created from it when spawning agents
+  repoUrl?: string; // SSH git URL — a worktree is created from it when spawning agents
   description?: string;
   tags?: string[];
   isPublic?: boolean;

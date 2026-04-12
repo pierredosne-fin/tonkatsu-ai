@@ -37,7 +37,7 @@ export function CreateAgentTemplateModal({ onClose, onCreated, editTemplate }: P
   const [name, setName] = useState(editTemplate?.name ?? '');
   const [mission, setMission] = useState(editTemplate?.mission ?? '');
   const [color, setColor] = useState(editTemplate?.avatarColor ?? PRESET_COLORS[0]);
-  const [workspacePath, setWorkspacePath] = useState(editTemplate?.workspacePath ?? '');
+  const [repoUrl, setRepoUrl] = useState(editTemplate?.repoUrl ?? '');
   const [loading, setLoading] = useState(false);
   const [generatingMission, setGeneratingMission] = useState(false);
 
@@ -73,9 +73,9 @@ export function CreateAgentTemplateModal({ onClose, onCreated, editTemplate }: P
     setLoading(true);
     let result;
     if (isEdit) {
-      result = await updateAgentTemplate(editTemplate!.id, { name: name.trim(), mission: mission.trim(), avatarColor: color, workspacePath: workspacePath.trim() || undefined });
+      result = await updateAgentTemplate(editTemplate!.id, { name: name.trim(), mission: mission.trim(), avatarColor: color, repoUrl: repoUrl.trim() || undefined });
     } else {
-      result = await createAgentTemplate({ name: name.trim(), mission: mission.trim(), avatarColor: color, workspacePath: workspacePath.trim() || undefined });
+      result = await createAgentTemplate({ name: name.trim(), mission: mission.trim(), avatarColor: color, repoUrl: repoUrl.trim() || undefined });
     }
     setLoading(false);
     if (result) { onCreated(); onClose(); }
@@ -260,20 +260,22 @@ export function CreateAgentTemplateModal({ onClose, onCreated, editTemplate }: P
             </div>
             <div className="form-group">
               <label htmlFor="tpl-workspace">
-                Workspace Path
-                <span className="form-hint"> — optional, absolute path to a git repo</span>
+                Git Repo <span className="form-hint"> — optional, SSH URL</span>
               </label>
               <input
                 id="tpl-workspace"
                 type="text"
-                value={workspacePath}
-                onChange={(e) => setWorkspacePath(e.target.value)}
-                placeholder="Leave empty to auto-create workspace"
+                value={repoUrl}
+                onChange={(e) => setRepoUrl(e.target.value)}
+                placeholder="git@github.com:org/repo.git"
                 spellCheck={false}
               />
-              {workspacePath.trim() && (
+              {repoUrl.trim() && !repoUrl.trim().startsWith('git@') && (
+                <span className="file-error" style={{ marginTop: 4, display: 'block' }}>Only SSH URLs accepted (git@…)</span>
+              )}
+              {repoUrl.trim().startsWith('git@') && (
                 <span className="form-hint-block">
-                  Each agent spawned from this template will get a dedicated worktree (branch <code>agent/…</code>) in this repo.
+                  Each agent spawned from this template gets a dedicated worktree (branch <code>agent/…</code>).
                 </span>
               )}
             </div>

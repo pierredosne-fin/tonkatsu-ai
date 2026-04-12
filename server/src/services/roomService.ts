@@ -62,6 +62,10 @@ export function hasVacantRoom(teamId: string): boolean {
   return Array.from(getTeamRooms(teamId).values()).some((r) => r.agentId === null);
 }
 
+export function resetAllRooms(): void {
+  teamRooms.clear();
+}
+
 export function swapRooms(roomId1: string, roomId2: string, teamId: string): boolean {
   const rooms = getTeamRooms(teamId);
   const room1 = rooms.get(roomId1);

@@ -5,9 +5,9 @@ interface TemplateStore {
   agentTemplates: AgentTemplate[];
   teamTemplates: TeamTemplate[];
   fetchAll: () => Promise<void>;
-  createAgentTemplate: (params: { name: string; mission: string; avatarColor: string; workspacePath?: string }) => Promise<AgentTemplate | null>;
+  createAgentTemplate: (params: { name: string; mission: string; avatarColor: string; repoUrl?: string }) => Promise<AgentTemplate | null>;
   createFromAgent: (agentId: string) => Promise<AgentTemplate | null>;
-  updateAgentTemplate: (id: string, params: { name: string; mission: string; avatarColor: string; workspacePath?: string }) => Promise<AgentTemplate | null>;
+  updateAgentTemplate: (id: string, params: { name: string; mission: string; avatarColor: string; repoUrl?: string }) => Promise<AgentTemplate | null>;
   createTeamTemplate: (params: { name: string; agentTemplateIds: string[] }) => Promise<TeamTemplate | null>;
   updateTeamTemplate: (id: string, params: { name?: string; agentTemplateIds?: string[] }) => Promise<TeamTemplate | null>;
   deleteAgentTemplate: (id: string) => Promise<void>;

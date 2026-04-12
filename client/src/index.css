@@ -811,7 +811,10 @@ body.is-dragging * {
   padding: 0 20px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.edit-tabs::-webkit-scrollbar { display: none; }
 .edit-tab {
   padding: 8px 14px;
   font-size: 12px;
@@ -823,6 +826,8 @@ body.is-dragging * {
   cursor: pointer;
   transition: color 0.15s;
   margin-bottom: -1px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .edit-tab:hover { color: var(--text); }
 .edit-tab--active { color: var(--accent); border-bottom-color: var(--accent); }
@@ -1614,6 +1619,63 @@ body.is-dragging * {
 .template-pill:hover {
   border-color: var(--accent);
   background: rgba(99, 102, 241, 0.08);
+}
+
+/* ── Workspace Mode Selector ──────────────────── */
+.workspace-mode-selector {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.workspace-mode-btn {
+  flex: 1;
+  padding: 5px 10px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface2);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.workspace-mode-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.workspace-mode-btn--active {
+  border-color: var(--accent);
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ── SSH Key inline form ──────────────────────── */
+.ssh-key-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.ssh-key-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+}
+
+.ssh-key-textarea {
+  font-family: monospace;
+  font-size: 11px;
+  resize: vertical;
+  min-height: 80px;
 }
 
 /* ── CreateTeamTemplateModal ──────────────────── */

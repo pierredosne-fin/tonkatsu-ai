@@ -8,6 +8,8 @@ import { createWorkspacesRouter } from './routes/workspaces.js';
 import { createTemplatesRouter } from './routes/templates.js';
 import { createSchedulesRouter } from './routes/schedules.js';
 import { createSkillsRouter } from './routes/skills.js';
+import { createSshKeysRouter } from './routes/sshKeys.js';
+import { createWorkspaceSyncRouter } from './routes/workspaceSync.js';
 import { registerHandlers } from './socket/handlers.js';
 import { loadAllAgents } from './services/persistenceService.js';
 import { restoreAgent } from './services/agentService.js';
@@ -42,6 +44,8 @@ app.use('/api/workspaces', createWorkspacesRouter());
 app.use('/api/templates', createTemplatesRouter(io));
 app.use('/api/schedules', createSchedulesRouter(io));
 app.use('/api/skills', createSkillsRouter());
+app.use('/api/ssh-keys', createSshKeysRouter());
+app.use('/api/workspace-sync', createWorkspaceSyncRouter(io));
 
 // ── Load data before accepting connections ───────────────────────────────────
 

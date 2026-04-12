@@ -11,7 +11,7 @@ const AgentTemplateSchema = z.object({
   name: z.string().min(1).max(50),
   mission: z.string().min(1).max(1000),
   avatarColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-  workspacePath: z.string().optional(),
+  repoUrl: z.string().optional(),
 });
 
 const TeamTemplateSchema = z.object({
@@ -185,7 +185,7 @@ Write tailored, concise instructions that will make this agent highly effective 
       avatarColor: agent.avatarColor,
     });
     fileService.snapshotWorkspace(
-      agent.workspacePath,
+      agent.repoUrl,
       templateService.getAgentTemplateWorkspacePath(template.id),
     );
     res.status(201).json(template);
@@ -272,13 +272,13 @@ Write tailored, concise instructions that will make this agent highly effective 
         avatarColor: agentTemplate.avatarColor,
         teamId,
         templateSlug: agentTemplate.name.toLowerCase().replace(/\s+/g, '-'),
-        workspacePath: agentTemplate.workspacePath,
+        repoUrl: agentTemplate.repoUrl,
       });
       if (agent) {
         // Copy template workspace files to the agent's workspace
         fileService.copyWorkspaceFiles(
           templateService.getAgentTemplateWorkspacePath(agentTemplate.id),
-          agent.workspacePath,
+          agent.repoUrl,
         );
         io.emit('agent:created', agentService.toClientAgent(agent));
         createdAgents.push(agentService.toClientAgent(agent));

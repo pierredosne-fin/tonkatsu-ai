@@ -6,6 +6,7 @@ import * as fileService from '../services/fileService.js';
 import * as templateService from '../services/templateService.js';
 import { runAgentTask } from '../services/claudeService.js';
 import { deleteSchedulesForAgent } from '../services/cronService.js';
+import { syncFromRemote } from '../services/gitService.js';
 import Anthropic from '@anthropic-ai/sdk';
 import type { Server } from 'socket.io';
 
@@ -21,7 +22,8 @@ export function createAgentRouter(io: Server) {
     mission: z.string().min(1).max(1000),
     avatarColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
     teamId: z.string().optional(),
-    workspacePath: z.string().optional(),
+    repoUrl: z.string().min(1).optional(),
+    repoBranch: z.string().optional(),
     agentTemplateId: z.string().uuid().optional(),
     canCreateAgents: z.boolean().optional(),
   });
@@ -40,15 +42,14 @@ export function createAgentRouter(io: Server) {
       return;
     }
 
-    // If a template is selected and the user didn't provide a workspace path,
-    // inherit the template's workspacePath (triggers worktree creation if it's a git repo)
-    let effectiveWorkspacePath = result.data.workspacePath;
-    if (!effectiveWorkspacePath && result.data.agentTemplateId) {
+    // Inherit template repoUrl if user didn't override
+    let effectiveRepoUrl = result.data.repoUrl;
+    if (!effectiveRepoUrl && result.data.agentTemplateId) {
       const tmpl = templateService.getAgentTemplate(result.data.agentTemplateId);
-      if (tmpl?.workspacePath) effectiveWorkspacePath = tmpl.workspacePath;
+      if (tmpl?.repoUrl) effectiveRepoUrl = tmpl.repoUrl;
     }
 
-    const agent = agentService.createAgent({ ...result.data, teamId, workspacePath: effectiveWorkspacePath });
+    const agent = agentService.createAgent({ ...result.data, teamId, repoUrl: effectiveRepoUrl });
     if (!agent) {
       res.status(409).json({ error: 'No vacant rooms available' });
       return;
@@ -112,11 +113,22 @@ export function createAgentRouter(io: Server) {
     res.status(202).json({ agentId: agent.id, name: agent.name, teamId: agent.teamId });
   });
 
+  const GitSyncSchema = z.object({
+    remoteUrl: z.string().min(1),
+    branch: z.string().min(1),
+    authMethod: z.enum(['ssh', 'system']),
+    sshKeyName: z.string().optional(),
+    lastSyncAt: z.string().optional(),
+    lastSyncStatus: z.enum(['ok', 'error']).optional(),
+    lastSyncError: z.string().optional(),
+  });
+
   const UpdateSchema = z.object({
     name: z.string().min(1).max(50).optional(),
     mission: z.string().min(1).max(1000).optional(),
     avatarColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
     canCreateAgents: z.boolean().optional(),
+    gitSync: GitSyncSchema.nullable().optional(),
   });
 
   router.patch('/:id', (req, res) => {
@@ -280,6 +292,30 @@ Write tailored, concise instructions that will make this agent highly effective 
     } catch (err) {
       console.error('[agents] generate-claude-md error:', err);
       res.status(500).json({ error: 'Generation failed' });
+    }
+  });
+
+  router.post('/:id/sync', (req, res) => {
+    const agent = agentService.getAgent(req.params.id);
+    if (!agent) { res.status(404).json({ error: 'Agent not found' }); return; }
+    if (!agent.gitSync) { res.status(400).json({ error: 'No git sync configured for this agent' }); return; }
+
+    const result = syncFromRemote(agent.workspacePath, agent.gitSync);
+    const now = new Date().toISOString();
+    const updated = agentService.updateAgent(req.params.id, {
+      gitSync: {
+        ...agent.gitSync,
+        lastSyncAt: now,
+        lastSyncStatus: result.ok ? 'ok' : 'error',
+        lastSyncError: result.error,
+      },
+    });
+    if (updated) io.emit('agent:updated', agentService.toClientAgent(updated));
+
+    if (result.ok) {
+      res.json({ ok: true, syncedAt: now });
+    } else {
+      res.status(422).json({ ok: false, error: result.error });
     }
   });
 

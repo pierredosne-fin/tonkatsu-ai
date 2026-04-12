@@ -1,5 +1,13 @@
 export type AgentStatus = 'sleeping' | 'working' | 'pending' | 'delegating';
 
+export interface WorkspaceSyncConfig {
+  remoteUrl?: string;
+  branch?: string;
+  lastSyncAt?: string;
+  lastSyncStatus?: 'ok' | 'error';
+  lastSyncError?: string;
+}
+
 export interface Message {
   role: 'user' | 'assistant';
   content: string;
@@ -38,7 +46,7 @@ export interface AgentTemplate {
   name: string;
   mission: string;
   avatarColor: string;
-  workspacePath?: string;
+  repoUrl?: string;
   description?: string;
   tags?: string[];
   isPublic?: boolean;

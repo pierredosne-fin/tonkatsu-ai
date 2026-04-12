@@ -30,17 +30,16 @@ interface WorkspaceFiles {
 
 interface Props {
   onClose: () => void;
-  onCreate: (name: string, mission: string, avatarColor: string, workspacePath?: string, teamId?: string, agentTemplateId?: string, canCreateAgents?: boolean) => void;
+  onCreate: (name: string, mission: string, avatarColor: string, teamId?: string, agentTemplateId?: string, canCreateAgents?: boolean, repoUrl?: string, repoBranch?: string) => void;
   onEdit?: (agentId: string, name: string, mission: string, avatarColor: string, canCreateAgents: boolean) => void;
   initialName?: string;
-  initialWorkspacePath?: string;
   teamId?: string;
   editAgent?: EditAgent;
 }
 
 type Tab = 'basic' | 'claude-md' | 'commands' | 'rules' | 'skills' | 'settings';
 
-export function CreateAgentModal({ onClose, onCreate, onEdit, initialName, initialWorkspacePath, teamId, editAgent }: Props) {
+export function CreateAgentModal({ onClose, onCreate, onEdit, initialName, teamId, editAgent }: Props) {
   const agentTemplates = useTemplateStore((s) => s.agentTemplates);
   const librarySkills = useSkillStore((s) => s.skills);
   const addSkillToAgent = useSkillStore((s) => s.addToAgent);
@@ -51,7 +50,11 @@ export function CreateAgentModal({ onClose, onCreate, onEdit, initialName, initi
   const [mission, setMission] = useState(editAgent?.mission ?? '');
   const [color, setColor] = useState(editAgent?.avatarColor ?? PRESET_COLORS[0]);
   const [canCreateAgents, setCanCreateAgents] = useState(editAgent?.canCreateAgents ?? false);
-  const [workspacePath, setWorkspacePath] = useState(initialWorkspacePath ?? '');
+  type WorkspaceMode = 'none' | 'remote';
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('none');
+  const [repoUrl, setRepoUrl] = useState('');
+  const [repoBranch, setRepoBranch] = useState('');
+  const [repoUrlError, setRepoUrlError] = useState('');
   const [loading, setLoading] = useState(false);
   const [generatingMission, setGeneratingMission] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>(undefined);
@@ -90,11 +93,26 @@ export function CreateAgentModal({ onClose, onCreate, onEdit, initialName, initi
   const handleBasicSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !mission.trim()) return;
+    if (workspaceMode === 'remote') {
+      const url = repoUrl.trim();
+      if (!url) { setRepoUrlError('Repo URL is required'); return; }
+      if (!url.startsWith('git@')) { setRepoUrlError('Only SSH URLs are accepted (git@github.com:org/repo.git)'); return; }
+      setRepoUrlError('');
+    }
     setLoading(true);
     if (isEdit && onEdit) {
       await onEdit(editAgent!.id, name.trim(), mission.trim(), color, canCreateAgents);
     } else {
-      await onCreate(name.trim(), mission.trim(), color, workspacePath.trim() || undefined, teamId, selectedTemplateId, canCreateAgents);
+      await onCreate(
+        name.trim(),
+        mission.trim(),
+        color,
+        teamId,
+        selectedTemplateId,
+        canCreateAgents,
+        workspaceMode === 'remote' ? repoUrl.trim() || undefined : undefined,
+        workspaceMode === 'remote' ? repoBranch.trim() || undefined : undefined,
+      );
     }
     setLoading(false);
   };
@@ -234,7 +252,10 @@ export function CreateAgentModal({ onClose, onCreate, onEdit, initialName, initi
                   {agentTemplates.map((t) => (
                     <button key={t.id} type="button"
                       className={`template-pill ${selectedTemplateId === t.id ? 'template-pill--selected' : ''}`}
-                      onClick={() => { setName(t.name); setMission(t.mission); setColor(t.avatarColor); setSelectedTemplateId(t.id); }}
+                      onClick={() => {
+          setName(t.name); setMission(t.mission); setColor(t.avatarColor); setSelectedTemplateId(t.id);
+          if (t.repoUrl) { setRepoUrl(t.repoUrl); setWorkspaceMode('remote'); } else { setRepoUrl(''); setWorkspaceMode('none'); }
+        }}
                     >
                       <span className="template-dot" style={{ backgroundColor: t.avatarColor }} />
                       {t.name}
@@ -261,17 +282,46 @@ export function CreateAgentModal({ onClose, onCreate, onEdit, initialName, initi
             </div>
             {!isEdit && (
               <div className="form-group">
-                <label htmlFor="agent-workspace">
-                  Workspace Path
-                  <span className="form-hint"> — optional, absolute path</span>
-                </label>
-                <input id="agent-workspace" type="text" value={workspacePath}
-                  onChange={(e) => setWorkspacePath(e.target.value)}
-                  placeholder="Leave empty to auto-create workspace" spellCheck={false} />
-                {workspacePath.trim() && (
-                  <span className="form-hint-block">
-                    Agent will work in this directory. If it's a git repo, a dedicated worktree (branch <code>agent/…</code>) will be created automatically.
-                  </span>
+                <label>Workspace</label>
+                <div className="workspace-mode-selector">
+                  <button
+                    type="button"
+                    className={`workspace-mode-btn${workspaceMode === 'none' ? ' workspace-mode-btn--active' : ''}`}
+                    onClick={() => setWorkspaceMode('none')}
+                  >
+                    Auto
+                  </button>
+                  <button
+                    type="button"
+                    className={`workspace-mode-btn${workspaceMode === 'remote' ? ' workspace-mode-btn--active' : ''}`}
+                    onClick={() => setWorkspaceMode('remote')}
+                  >
+                    Git repo
+                  </button>
+                </div>
+                {workspaceMode === 'remote' && (
+                  <>
+                    <input
+                      type="text"
+                      value={repoUrl}
+                      onChange={(e) => { setRepoUrl(e.target.value); setRepoUrlError(''); }}
+                      placeholder="git@github.com:org/repo.git"
+                      spellCheck={false}
+                      style={{ marginBottom: 6 }}
+                    />
+                    <input
+                      type="text"
+                      value={repoBranch}
+                      onChange={(e) => setRepoBranch(e.target.value)}
+                      placeholder="Branch — leave empty for default"
+                      spellCheck={false}
+                      style={{ marginBottom: 6 }}
+                    />
+                    {repoUrlError && <div className="file-error" style={{ marginBottom: 6 }}>{repoUrlError}</div>}
+                    <span className="form-hint-block">
+                      SSH only. Repo cloned once into <code>repos/</code>; dedicated worktree created for this agent. Configure your SSH key in Settings.
+                    </span>
+                  </>
                 )}
               </div>
             )}
@@ -588,6 +638,7 @@ export function CreateAgentModal({ onClose, onCreate, onEdit, initialName, initi
             )}
           </div>
         )}
+
       </div>
     </div>
   );

@@ -1,10 +1,41 @@
-import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
+import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync, chmodSync, unlinkSync } from 'fs';
+import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
-import type { Agent, AgentTemplate, TeamTemplate, CronSchedule, SkillTemplate } from '../models/types.js';
+import type { Agent, AgentTemplate, TeamTemplate, CronSchedule, SkillTemplate, GitSync } from '../models/types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-export const WORKSPACES_DIR = join(__dirname, '../../../workspaces');
+// .sync-data/ lives at the project root — completely outside workspaces/ so git/rsync syncs never touch it
+const SYNC_DATA_DIR = join(__dirname, '../../../.sync-data');
+export const SSH_KEYS_DIR = join(SYNC_DATA_DIR, 'ssh-keys');
+const SYNC_CONFIG_PATH = join(SYNC_DATA_DIR, 'config.json');
+
+export const WORKSPACES_DIR: string = join(__dirname, '../../../workspaces');
+export const REPOS_DIR: string = join(__dirname, '../../../repos');
+
+
+export const GLOBAL_SSH_KEY_NAME = 'default';
+
+export function hasGlobalSshKey(): boolean {
+  return existsSync(getSshKeyPath(GLOBAL_SSH_KEY_NAME));
+}
+
+export interface WorkspaceSyncConfig {
+  remoteUrl: string;
+  branch: string;
+  lastSyncAt?: string;
+  lastSyncStatus?: 'ok' | 'error';
+  lastSyncError?: string;
+}
+
+export function getWorkspaceSyncConfig(): WorkspaceSyncConfig | null {
+  if (!existsSync(SYNC_CONFIG_PATH)) return null;
+  try { return JSON.parse(readFileSync(SYNC_CONFIG_PATH, 'utf-8')); } catch { return null; }
+}
+
+export function saveWorkspaceSyncConfig(cfg: WorkspaceSyncConfig): void {
+  mkdirSync(SYNC_DATA_DIR, { recursive: true });
+  writeFileSync(SYNC_CONFIG_PATH, JSON.stringify(cfg, null, 2), 'utf-8');
+}
 
 // ── Team helpers ─────────────────────────────────────────────────────────────
 
@@ -51,6 +82,7 @@ export interface PersistedAgent {
   worktreeOf?: string;
   sessionId?: string;
   canCreateAgents?: boolean;
+  gitSync?: GitSync;
   lastActivity: string;
   createdAt: string;
 }
@@ -76,6 +108,7 @@ export function saveAgents(agents: Agent[]): void {
       worktreeOf: a.worktreeOf,
       sessionId: a.sessionId,
       canCreateAgents: a.canCreateAgents,
+      gitSync: a.gitSync,
       lastActivity: a.lastActivity.toISOString(),
       createdAt: a.createdAt.toISOString(),
     }));
@@ -153,6 +186,35 @@ export function saveSkills(skills: SkillTemplate[]): void {
   } catch (err) {
     console.warn('[persistence] Failed to save skills:', err);
   }
+}
+
+// ── SSH Key Storage (.ssh/ dir, gitignored) ───────────────────────────────────
+
+export function listSshKeys(): string[] {
+  if (!existsSync(SSH_KEYS_DIR)) return [];
+  try {
+    return readdirSync(SSH_KEYS_DIR)
+      .filter((f) => !f.startsWith('.'))
+      .map((f) => basename(f));
+  } catch {
+    return [];
+  }
+}
+
+export function saveSshKey(name: string, content: string): void {
+  mkdirSync(SSH_KEYS_DIR, { recursive: true }); // creates .sync-data/ssh-keys/ if needed
+  const keyPath = join(SSH_KEYS_DIR, name);
+  writeFileSync(keyPath, content, 'utf-8');
+  try { chmodSync(keyPath, 0o600); } catch { /* ignore on windows */ }
+}
+
+export function deleteSshKey(name: string): void {
+  const keyPath = join(SSH_KEYS_DIR, name);
+  if (existsSync(keyPath)) unlinkSync(keyPath);
+}
+
+export function getSshKeyPath(name: string): string {
+  return join(SSH_KEYS_DIR, name);
 }
 
 export function loadAllAgents(): PersistedAgent[] {

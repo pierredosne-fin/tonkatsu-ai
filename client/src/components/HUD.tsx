@@ -5,10 +5,11 @@ import { requestDesktopNotifications } from '../store/socketStore';
 interface Props {
   onAddAgent: () => void;
   onOpenTemplates: () => void;
+  onOpenSync: () => void;
   connected: boolean;
 }
 
-export function HUD({ onAddAgent, onOpenTemplates, connected }: Props) {
+export function HUD({ onAddAgent, onOpenTemplates, onOpenSync, connected }: Props) {
   const agents = useAgentStore((s) => s.agents);
   const currentTeamId = useAgentStore((s) => s.currentTeamId);
   const teamAgentCount = agents.filter((a) => a.teamId === currentTeamId).length;
@@ -86,6 +87,9 @@ export function HUD({ onAddAgent, onOpenTemplates, connected }: Props) {
         {notifPerm === 'granted' && (
           <span className="hud-notif-on" title="Desktop notifications enabled">🔔</span>
         )}
+        <button className="btn btn-ghost" onClick={onOpenSync} title="Configure workspace git sync">
+          ↓ Sync
+        </button>
         <button className="btn btn-ghost" onClick={onOpenTemplates}>
           Templates
         </button>

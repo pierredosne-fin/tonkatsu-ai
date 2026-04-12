@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSocket } from './hooks/useSocket';
 import { useAgentStore } from './store/agentStore';
+import { useSocketStore } from './store/socketStore';
 import { useTemplateStore } from './store/templateStore';
 import { useSkillStore } from './store/skillStore';
 import { HUD } from './components/HUD';
@@ -11,6 +12,7 @@ import { CreateAgentModal } from './components/CreateAgentModal';
 import { ChatModal } from './components/ChatModal';
 import { ToastStack } from './components/ToastStack';
 import { TemplatesPanel } from './components/TemplatesPanel';
+import { WorkspaceSyncModal } from './components/WorkspaceSyncModal';
 
 export default function App() {
   const { connected } = useSocket();
@@ -18,6 +20,7 @@ export default function App() {
   const setCurrentTeam = useAgentStore((s) => s.setCurrentTeam);
   const [showCreate, setShowCreate] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [showSync, setShowSync] = useState(false);
   const [chatAgentId, setChatAgentId] = useState<string | null>(null);
   const [editAgentId, setEditAgentId] = useState<string | null>(null);
   const agents = useAgentStore((s) => s.agents);
@@ -27,19 +30,29 @@ export default function App() {
     useSkillStore.getState().fetchAll();
   }, []);
 
+  // Reload page when workspace sync completes
+  const socket = useSocketStore((s) => s.socket);
+  useEffect(() => {
+    if (!socket) return;
+    const handler = () => window.location.reload();
+    socket.on('workspace:synced', handler);
+    return () => { socket.off('workspace:synced', handler); };
+  }, [socket]);
+
   const handleCreate = async (
     name: string,
     mission: string,
     avatarColor: string,
-    workspacePath?: string,
     teamId?: string,
     agentTemplateId?: string,
-    canCreateAgents?: boolean
+    canCreateAgents?: boolean,
+    repoUrl?: string,
+    repoBranch?: string,
   ) => {
     const res = await fetch('/api/agents', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, mission, avatarColor, workspacePath, teamId, agentTemplateId, canCreateAgents }),
+      body: JSON.stringify({ name, mission, avatarColor, teamId, agentTemplateId, canCreateAgents, repoUrl, repoBranch }),
     });
     if (res.ok) {
       setShowCreate(false);
@@ -78,7 +91,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <HUD onAddAgent={() => setShowCreate(true)} onOpenTemplates={() => setShowTemplates(true)} connected={connected} />
+      <HUD onAddAgent={() => setShowCreate(true)} onOpenTemplates={() => setShowTemplates(true)} onOpenSync={() => setShowSync(true)} connected={connected} />
       <TeamTabs onCreateTeam={handleCreateTeam} onDeleteTeam={handleDeleteTeam} onOpenTemplates={() => setShowTemplates(true)} />
       <div className="main">
         <OfficeMap
@@ -120,6 +133,7 @@ export default function App() {
       )}
 
       <ToastStack />
+      {showSync && <WorkspaceSyncModal onClose={() => setShowSync(false)} />}
       {showTemplates && <TemplatesPanel onClose={() => setShowTemplates(false)} />}
     </div>
   );

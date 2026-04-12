@@ -2,9 +2,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { mkdirSync, rmSync, existsSync, writeFileSync, renameSync } from 'fs';
 import { join } from 'path';
 import { setCreateAgentsPermission, setupWorkspaceStructure } from './fileService.js';
-import type { Agent, AgentStatus, Message } from '../models/types.js';
-import { assignRoom, freeRoom, swapRooms } from './roomService.js';
-import { isGitRepo, createWorktree, removeWorktree, pruneWorktrees } from './gitService.js';
+import type { Agent, AgentStatus, GitSync, Message } from '../models/types.js';
+import { assignRoom, freeRoom, swapRooms, resetAllRooms } from './roomService.js';
+import { createWorktree, removeWorktree, pruneWorktrees, cloneRepoIfNeeded } from './gitService.js';
 import {
   getSessionMessages,
   listSessions as sdkListSessions,
@@ -12,6 +12,7 @@ import {
 } from '@anthropic-ai/claude-agent-sdk';
 import {
   saveAgents,
+  loadAllAgents,
   DEFAULT_TEAM,
   WORKSPACES_DIR,
   teamDisplayName,
@@ -66,7 +67,8 @@ export function createAgent(params: {
   mission: string;
   avatarColor: string;
   teamId?: string;
-  workspacePath?: string;
+  repoUrl?: string;
+  repoBranch?: string;
   templateSlug?: string;
   canCreateAgents?: boolean;
 }): Agent | null {
@@ -82,30 +84,31 @@ export function createAgent(params: {
   const autoPath = (params.templateSlug && params.templateSlug !== slug)
     ? join(teamDir, params.templateSlug, slug)
     : join(teamDir, slug);
-  const externalPath = params.workspacePath?.trim();
 
   let workspacePath: string;
   let worktreeOf: string | undefined;
   let isOwnWorkspace = false;
 
-  if (externalPath) {
-    if (isGitRepo(externalPath)) {
-      const branch = `agent/${slug}-${id.slice(0, 8)}`;
-      // Ensure parent directory exists (git worktree add won't create intermediate dirs)
-      mkdirSync(join(autoPath, '..'), { recursive: true });
-      // Prune stale worktree references so a previously-deleted agent's path doesn't block
-      pruneWorktrees(externalPath);
-      if (createWorktree(externalPath, autoPath, branch)) {
-        workspacePath = autoPath;
-        worktreeOf = externalPath;
-        isOwnWorkspace = true;
-        console.log(`[git] Created worktree at ${autoPath} (branch: ${branch})`);
-      } else {
-        console.warn(`[git] Worktree creation failed for ${externalPath} → falling back to direct path`);
-        workspacePath = externalPath;
-      }
+  const repoUrl = params.repoUrl?.trim();
+
+  if (repoUrl) {
+    const clonedPath = cloneRepoIfNeeded(repoUrl, params.repoBranch?.trim());
+    if (!clonedPath) {
+      freeRoom(id, teamId);
+      return null;
+    }
+    const branch = `agent/${slug}-${id.slice(0, 8)}`;
+    mkdirSync(join(autoPath, '..'), { recursive: true });
+    pruneWorktrees(clonedPath);
+    if (createWorktree(clonedPath, autoPath, branch)) {
+      workspacePath = autoPath;
+      worktreeOf = clonedPath;
+      isOwnWorkspace = true;
+      console.log(`[git] Created worktree from remote clone at ${autoPath} (branch: ${branch})`);
     } else {
-      workspacePath = externalPath;
+      console.warn(`[git] Worktree creation failed after cloning ${repoUrl}`);
+      freeRoom(id, teamId);
+      return null;
     }
   } else {
     workspacePath = autoPath;
@@ -165,6 +168,7 @@ export function restoreAgent(persisted: PersistedAgent): Agent | null {
     worktreeOf: persisted.worktreeOf,
     sessionId: persisted.sessionId,
     canCreateAgents: persisted.canCreateAgents ?? false,
+    gitSync: persisted.gitSync,
     lastActivity: new Date(persisted.lastActivity),
     createdAt: new Date(persisted.createdAt),
   };
@@ -180,7 +184,7 @@ export function restoreAgent(persisted: PersistedAgent): Agent | null {
   return agent;
 }
 
-export function updateAgent(id: string, params: { name?: string; mission?: string; avatarColor?: string; canCreateAgents?: boolean }): Agent | null {
+export function updateAgent(id: string, params: { name?: string; mission?: string; avatarColor?: string; canCreateAgents?: boolean; gitSync?: GitSync | null }): Agent | null {
   const agent = agents.get(id);
   if (!agent) return null;
   if (params.name !== undefined) agent.name = params.name;
@@ -189,6 +193,9 @@ export function updateAgent(id: string, params: { name?: string; mission?: strin
   if (params.canCreateAgents !== undefined) {
     agent.canCreateAgents = params.canCreateAgents;
     setCreateAgentsPermission(agent.workspacePath, params.canCreateAgents);
+  }
+  if ('gitSync' in params) {
+    agent.gitSync = params.gitSync ?? undefined;
   }
   persist();
   return agent;
@@ -203,6 +210,10 @@ export function deleteAgent(id: string): boolean {
   persist();
   if (agent.worktreeOf) {
     removeWorktree(agent.worktreeOf, agent.workspacePath);
+  }
+  // Clean up workspace directory if it lives under WORKSPACES_DIR
+  if (agent.workspacePath.startsWith(WORKSPACES_DIR) && existsSync(agent.workspacePath)) {
+    try { rmSync(agent.workspacePath, { recursive: true, force: true }); } catch { /* ignore */ }
   }
   return true;
 }
@@ -222,6 +233,27 @@ export function deleteTeam(teamId: string): string[] {
   }
   persist();
   return deletedIds;
+}
+
+export function hotReloadWorkspace(io: import('socket.io').Server): void {
+  // Abort all running streams
+  for (const ctrl of activeStreams.values()) ctrl.abort();
+  activeStreams.clear();
+
+  // Clear all in-memory state
+  agents.clear();
+  resetAllRooms();
+
+  // Reload from disk
+  const persisted = loadAllAgents();
+  for (const p of persisted) {
+    restoreAgent(p);
+  }
+
+  // Push fresh state to all clients
+  io.emit('agent:list', Array.from(agents.values()).map(toClientAgent));
+  io.emit('team:list', getTeamList());
+  console.log(`[hotReload] Reloaded ${agents.size} agents from disk`);
 }
 
 export function swapAgentRooms(agentId: string, targetRoomId: string): boolean {
