@@ -42,15 +42,6 @@ export function createAgentRouter(io: Server) {
       return;
     }
 
-    const slug = result.data.name.trim().toLowerCase().replace(/\s+/g, '-');
-    const duplicate = agentService.getAllAgents().find(
-      (a) => a.teamId === teamId && a.name.toLowerCase().replace(/\s+/g, '-') === slug
-    );
-    if (duplicate) {
-      res.status(409).json({ error: `An agent named "${result.data.name}" already exists in this team` });
-      return;
-    }
-
     // Inherit template repoUrl if user didn't override
     let effectiveRepoUrl = result.data.repoUrl;
     if (!effectiveRepoUrl && result.data.agentTemplateId) {

@@ -80,32 +80,11 @@ export interface PersistedAgent {
   teamId: string;
   workspacePath: string;
   worktreeOf?: string;
-  repoUrl?: string;
-  repoBranch?: string;
   sessionId?: string;
   canCreateAgents?: boolean;
   gitSync?: GitSync;
   lastActivity: string;
   createdAt: string;
-}
-
-/** Write PersistedAgent records straight back to disk (used after post-sync repair). */
-export function savePersistedAgents(persisted: PersistedAgent[]): void {
-  const byTeam = new Map<string, PersistedAgent[]>();
-  for (const a of persisted) {
-    const list = byTeam.get(a.teamId) ?? [];
-    list.push(a);
-    byTeam.set(a.teamId, list);
-  }
-  for (const [teamId, teamAgents] of byTeam) {
-    const path = teamRuntimePath(teamId);
-    mkdirSync(dirname(path), { recursive: true });
-    try {
-      writeFileSync(path, JSON.stringify(teamAgents, null, 2), 'utf-8');
-    } catch (err) {
-      console.warn(`[persistence] Failed to save agents for team ${teamId}:`, err);
-    }
-  }
 }
 
 export function saveAgents(agents: Agent[]): void {
@@ -127,8 +106,6 @@ export function saveAgents(agents: Agent[]): void {
       teamId: a.teamId,
       workspacePath: a.workspacePath,
       worktreeOf: a.worktreeOf,
-      repoUrl: a.repoUrl,
-      repoBranch: a.repoBranch,
       sessionId: a.sessionId,
       canCreateAgents: a.canCreateAgents,
       gitSync: a.gitSync,

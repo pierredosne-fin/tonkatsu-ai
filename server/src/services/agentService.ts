@@ -4,7 +4,7 @@ import { join } from 'path';
 import { setCreateAgentsPermission, setupWorkspaceStructure } from './fileService.js';
 import type { Agent, AgentStatus, GitSync, Message } from '../models/types.js';
 import { assignRoom, freeRoom, swapRooms, resetAllRooms } from './roomService.js';
-import { createWorktree, restoreWorktree, removeWorktree, pruneWorktrees, cloneRepoIfNeeded, getRepoRemoteUrl } from './gitService.js';
+import { createWorktree, removeWorktree, pruneWorktrees, cloneRepoIfNeeded } from './gitService.js';
 import {
   getSessionMessages,
   listSessions as sdkListSessions,
@@ -12,7 +12,6 @@ import {
 } from '@anthropic-ai/claude-agent-sdk';
 import {
   saveAgents,
-  savePersistedAgents,
   loadAllAgents,
   DEFAULT_TEAM,
   WORKSPACES_DIR,
@@ -25,72 +24,6 @@ const activeStreams: Map<string, AbortController> = new Map();
 
 function persist() {
   saveAgents(Array.from(agents.values()));
-}
-
-export function persistAgents(): void {
-  persist();
-}
-
-export function repairWorktreeAgents(): void {
-  // Read from disk (post-sync git state) — do NOT use in-memory agents
-  const persisted = loadAllAgents();
-  let dirty = false;
-
-  for (const agent of persisted) {
-    // Back-fill repoUrl from git remote if missing (agents created before this field was added)
-    if (!agent.repoUrl && agent.worktreeOf && existsSync(agent.worktreeOf)) {
-      const inferred = getRepoRemoteUrl(agent.worktreeOf);
-      if (inferred) {
-        agent.repoUrl = inferred;
-        dirty = true;
-        console.log(`[sync] Agent "${agent.name}": inferred repoUrl="${inferred}" from worktreeOf`);
-      }
-    }
-
-    if (!agent.repoUrl) continue; // only agents backed by a git repo
-
-    const slug = agent.name.toLowerCase().replace(/\s+/g, '-');
-    const branch = `agent/${slug}-${agent.id.slice(0, 8)}`;
-
-    // Step 1: ensure repo is cloned (same as createAgent — idempotent)
-    const clonedPath = cloneRepoIfNeeded(agent.repoUrl, agent.repoBranch);
-    if (!clonedPath) {
-      console.warn(`[sync] repairWorktreeAgents: failed to ensure repo for agent "${agent.name}"`);
-      continue;
-    }
-    if (agent.worktreeOf !== clonedPath) { agent.worktreeOf = clonedPath; dirty = true; }
-
-    // Step 2: ensure worktree exists and has a valid .git file
-    // If the directory exists but lost its .git file (git reset --hard in the outer repo
-    // can strip the gitlink), remove it so git worktree add can recreate it cleanly.
-    const gitFilePath = join(agent.workspacePath, '.git');
-    if (existsSync(agent.workspacePath) && !existsSync(gitFilePath)) {
-      console.log(`[sync] Agent "${agent.name}": workspace missing .git file — recreating worktree`);
-      try { rmSync(agent.workspacePath, { recursive: true, force: true }); } catch { /* ignore */ }
-    }
-    if (!existsSync(agent.workspacePath)) {
-      mkdirSync(join(agent.workspacePath, '..'), { recursive: true });
-      pruneWorktrees(clonedPath);
-      if (!restoreWorktree(clonedPath, agent.workspacePath, branch)) {
-        console.warn(`[sync] Agent "${agent.name}": failed to recreate worktree at ${agent.workspacePath}`);
-        continue;
-      }
-      console.log(`[sync] Agent "${agent.name}": worktree recreated at ${agent.workspacePath}`);
-    }
-
-    // Step 3: ensure workspace runtime files (same as createAgent)
-    setupWorkspaceStructure(agent.workspacePath, agent.name, agent.mission);
-    const mcpJsonPath = join(agent.workspacePath, '.mcp.json');
-    if (!existsSync(mcpJsonPath)) {
-      writeFileSync(mcpJsonPath, JSON.stringify({ mcpServers: {} }, null, 2));
-    }
-
-  }
-
-  // If any agent records were updated (repoUrl/worktreeOf back-filled), save back to disk
-  if (dirty) {
-    savePersistedAgents(persisted);
-  }
 }
 
 export function getAllAgents(): Agent[] {
@@ -213,8 +146,6 @@ export function createAgent(params: {
     teamId,
     workspacePath,
     worktreeOf,
-    repoUrl: repoUrl || undefined,
-    repoBranch: params.repoBranch?.trim() || undefined,
     canCreateAgents: params.canCreateAgents ?? false,
     lastActivity: new Date(),
     createdAt: new Date(),

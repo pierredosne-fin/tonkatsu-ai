@@ -79,23 +79,6 @@ export function pruneWorktrees(repoPath: string): void {
   } catch { /* ignore */ }
 }
 
-export function restoreWorktree(repoPath: string, worktreePath: string, branch: string): boolean {
-  try {
-    pruneWorktrees(repoPath);
-    try {
-      // Branch exists in history (most common after sync) — check it out as a worktree
-      execSync(`git worktree add "${worktreePath}" "${branch}"`, { cwd: repoPath, stdio: 'pipe' });
-    } catch {
-      // Branch doesn't exist (fresh clone on a new machine) — create it
-      execSync(`git worktree add -b "${branch}" "${worktreePath}"`, { cwd: repoPath, stdio: 'pipe' });
-    }
-    return true;
-  } catch (err) {
-    console.warn('[git] restoreWorktree failed:', err);
-    return false;
-  }
-}
-
 export function removeWorktree(repoPath: string, worktreePath: string): void {
   try {
     execSync(`git worktree remove --force "${worktreePath}"`, {
@@ -161,12 +144,6 @@ export function syncWorkspaceDir(workspacesDir: string, cfg: WorkspaceSyncConfig
     console.warn('[git] syncWorkspaceDir failed:', msg);
     return { ok: false, error: msg };
   }
-}
-
-export function getRepoRemoteUrl(repoPath: string): string | null {
-  try {
-    return execSync('git remote get-url origin', { cwd: repoPath, stdio: 'pipe' }).toString().trim();
-  } catch { return null; }
 }
 
 export function repoSlugFromUrl(url: string): string {

@@ -30,8 +30,6 @@ export interface Agent {
   teamId: string;
   workspacePath: string;
   worktreeOf?: string; // original repo path when this workspace is a git worktree
-  repoUrl?: string;    // SSH/HTTPS URL used to clone the repo (stored for recovery after sync)
-  repoBranch?: string; // branch used at clone time
   sessionId?: string;  // Claude Code Agent SDK session ID for conversation continuity
   canCreateAgents?: boolean;
   pendingQuestion?: string;

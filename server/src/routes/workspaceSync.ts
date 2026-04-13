@@ -14,7 +14,7 @@ import { syncWorkspaceDir } from '../services/gitService.js';
 import { loadAllTemplates } from '../services/templateService.js';
 import { loadAllSkills } from '../services/skillService.js';
 import { reloadSchedules } from '../services/cronService.js';
-import { hotReloadWorkspace, repairWorktreeAgents } from '../services/agentService.js';
+import { hotReloadWorkspace } from '../services/agentService.js';
 
 const ConfigSchema = z.object({
   remoteUrl: z.string().min(1),
@@ -59,7 +59,6 @@ export function createWorkspaceSyncRouter(io: Server) {
       try { loadAllTemplates(); } catch { /* ignore */ }
       try { loadAllSkills(); } catch { /* ignore */ }
       try { reloadSchedules(io); } catch { /* ignore */ }
-      try { repairWorktreeAgents(); } catch (e) { console.warn('[sync] repairWorktreeAgents failed:', e); }
       hotReloadWorkspace(io);
       io.emit('workspace:synced', { syncedAt: now });
       res.json({ ok: true, syncedAt: now });
