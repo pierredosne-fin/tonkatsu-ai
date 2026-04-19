@@ -194,7 +194,7 @@ export function ChatModal({ agentId, onClose, onDelete, onEdit, readOnly }: Prop
 
   function handleDelete() {
     if (!onDelete) return;
-    if (confirm(`Delete agent "${agent.name}"?`)) {
+    if (confirm(`Delete agent "${agent?.name ?? 'this agent'}"?`)) {
       onDelete(agentId);
       onClose();
     }
