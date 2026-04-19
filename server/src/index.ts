@@ -29,14 +29,14 @@ process.on('uncaughtException', (err) => {
 const app = express();
 const httpServer = createServer(app);
 
+const DEV_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:5173'];
+const isProd = process.env.NODE_ENV === 'production';
+
 const io = new Server(httpServer, {
-  cors: {
-    origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
-    methods: ['GET', 'POST'],
-  },
+  cors: isProd ? { origin: '*' } : { origin: DEV_ORIGINS, methods: ['GET', 'POST'] },
 });
 
-app.use(cors({ origin: ['http://localhost:5173', 'http://127.0.0.1:5173'] }));
+app.use(cors(isProd ? {} : { origin: DEV_ORIGINS }));
 app.use(express.json());
 
 app.get('/api/config', (_req, res) => {
