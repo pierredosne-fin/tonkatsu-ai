@@ -6,211 +6,107 @@ sidebar_position: 6
 
 # Troubleshooting
 
-Common issues and how to fix them.
+Something not working? This page covers the most common issues and how to fix them.
 
 ---
 
-## API key not set or invalid
+## The app won't start
 
-**Symptom:** Agent immediately returns to `idle` with no output. Browser console shows `401` on `/api/agents`.
+**Error: `listen EADDRINUSE :::3001`**
 
-**Fix:**
+Something else is already using port 3001. Either:
 
-1. Check `server/.env` exists and contains:
-   ```env
-   ANTHROPIC_API_KEY=sk-ant-...
-   ```
-2. Verify the key is valid at [console.anthropic.com](https://console.anthropic.com/)
-3. Restart the server — `.env` is read on startup, not hot-reloaded
+- Change the port in `server/.env`: `PORT=3002`
+- Or find and stop whatever is using the port:
+  ```bash
+  lsof -ti:3001 | xargs kill
+  ```
 
-```bash
-# Verify the env file is being read
-grep ANTHROPIC server/.env
-```
+**Error: `listen EADDRINUSE :::5173`** — same thing, but for the browser UI port.
 
 ---
 
-## Port conflicts
+## Assistants don't respond
 
-**Symptom:** `Error: listen EADDRINUSE :::3001` or `:::5173`.
+**Symptom:** You send a message, the assistant shows "Running" briefly, then goes back to "Idle" with no output.
 
-**Fix — change the server port:**
+**Most likely cause:** The API key is missing or invalid.
 
+Check `server/.env`:
 ```env
-# server/.env
-PORT=3002
+ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-**Fix — kill the conflicting process:**
+- Make sure the file exists at `server/.env` (not just `.env`)
+- Make sure the key is valid at [console.anthropic.com](https://console.anthropic.com/)
+- Restart the server after changing the file — it's only read on startup
 
+---
+
+## An assistant is stuck on "Running"
+
+**Symptom:** The assistant shows "Running" indefinitely with no output appearing.
+
+This usually means the connection to the AI timed out or the server was interrupted mid-task.
+
+**Fix:** Restart the server:
 ```bash
-# Find what's on port 3001
-lsof -ti:3001 | xargs kill
-# Or for 5173
-lsof -ti:5173 | xargs kill
+# Stop with Ctrl+C, then:
+npm run dev
 ```
 
----
-
-## Agent stuck in `running` state
-
-**Symptom:** Agent shows `running` indefinitely. No stream output. No error in UI.
-
-**Cause:** The SDK query hung (network timeout, Anthropic API outage) or the process was killed mid-run.
-
-**Fix:**
-
-1. Check the server logs for an error or hanging promise
-2. In the UI, click the agent → **AgentSidebar** → **Force Idle** button (if available)
-3. Or via the API:
-   ```bash
-   curl -X PATCH http://localhost:3001/api/agents/<agentId> \
-     -H "Content-Type: application/json" \
-     -d '{ "status": "idle" }'
-   ```
-4. Restart the server — `loadAllAgents()` on startup resets all `running` agents to `idle`
-
-**Prevention:** The server sets `maxTurns: 200` per task. A task that genuinely needs more than 200 tool-call cycles will be cut off. If your agent is hitting this, break the task into smaller steps.
+On restart, all assistants in a "Running" state are automatically reset to "Idle". Your conversation history is preserved.
 
 ---
 
-## Session not resuming after restart
+## Conversation history is gone after a restart
 
-**Symptom:** After restarting the server, the agent starts a fresh conversation instead of continuing the previous one.
+**Symptom:** The assistant is there, but the conversation history is empty.
 
-**Cause:** The `sessionId` was not saved to `agents.json` before the server was killed, or the SDK session expired.
+The session may have expired on Anthropic's side (this happens after long periods of inactivity), or the session ID wasn't saved before the server stopped.
 
-**Fix:**
-
-1. Check `workspaces/<teamId>/agents.json` — find your agent and look for `sessionId`:
-   ```json
-   { "id": "agent_xyz", "sessionId": "sess_abc123", ... }
-   ```
-   If `sessionId` is `null`, the session was never persisted.
-
-2. Sessions can expire on Anthropic's side after periods of inactivity. If the session is stale, start a new conversation explicitly:
-   - In UI: ChatModal → **New Conversation**
-   - Via socket: `socket.emit('agent:newConversation', { id: agentId })`
+**Fix:** Start a new conversation — click **New Conversation** in the chat. The assistant will start fresh but keep its identity and memory files.
 
 ---
 
-## Git worktree errors on repo-backed agents
+## An assistant won't delegate to another
 
-**Symptom:** Agent creation fails with `fatal: ... is not an empty directory` or `fatal: worktree already exists`.
+**Symptom:** You see `<CALL_AGENT name="X">...</CALL_AGENT>` as literal text in the response instead of triggering a delegation.
 
-**Fix — clean up the stale worktree:**
+Common causes:
 
-```bash
-# List all worktrees
-git -C repos/<repo-slug>/ worktree list
-
-# Remove the stale one
-git -C repos/<repo-slug>/ worktree remove \
-  workspaces/<teamId>/<agentSlug> --force
-
-# Then retry agent creation
-```
-
-**Symptom:** `Permission denied (publickey)` during clone.
-
-**Fix:** Check SSH key setup:
-```bash
-# Test connectivity
-ssh -T git@github.com
-
-# Ensure the key is in your SSH agent
-ssh-add ~/.ssh/your_key
-
-# Or add it in UI: Settings → SSH Keys
-```
+1. **Wrong name** — the name in the tag must exactly match the target assistant's name (case-sensitive). Check the exact name: look at the room in the office grid.
+2. **Inside a code block** — if the tag appears inside triple backticks in the response, the server won't intercept it
+3. **Depth limit hit** — delegations are capped at 5 levels deep
 
 ---
 
-## Socket.IO connection issues
+## The browser shows "Disconnected"
 
-**Symptom:** UI shows "Disconnected" or agent updates don't appear in real time.
+**Symptom:** The office grid shows a disconnected state or doesn't update in real time.
 
-**Fix:**
-
-1. Verify the server is running: `curl http://localhost:3001/api/agents`
-2. Check browser console for WebSocket errors
-3. If running behind a reverse proxy, ensure WebSocket upgrade headers are forwarded — see [Deployment](./deployment)
-4. In development, ensure Vite's proxy config is intact (should proxy `/socket.io` to `localhost:3001`)
+1. Check the server is still running (look at your terminal)
+2. Refresh the browser
+3. If you're behind a reverse proxy (nginx, Caddy), make sure WebSocket headers are forwarded — see [Deployment](./deployment)
 
 ---
 
-## Agents not persisting across restarts
+## An assistant I deleted is still showing up
 
-**Symptom:** The agents list is empty after a server restart.
-
-**Cause:** `workspaces/` directory is missing or `agents.json` was deleted.
-
-**Fix:**
-
-```bash
-# Check if the file exists
-ls workspaces/*/agents.json
-
-# Check its contents
-cat workspaces/default/agents.json
-```
-
-If the file is missing, agents were never created or the directory was cleaned. Re-create agents via the UI.
-
-Make sure the `workspaces/` directory is **not** in `.gitignore` if you want to preserve it across git operations (it's not committed, but should be excluded from `git clean`).
+Hard-refresh the browser (`Cmd+Shift+R` on Mac, `Ctrl+Shift+R` on Windows). The browser may have cached an older state.
 
 ---
 
-## Template instantiation fails
+## Repo-backed agent won't connect to the repository
 
-**Symptom:** `POST /api/templates/teams/:id/instantiate` returns an error about a missing agent template.
+**Symptom:** Creating a repo-backed agent fails with a permission or clone error.
 
-**Cause:** An agent template referenced in the team template was deleted.
-
-**Fix:**
-
-```bash
-# Check the team template
-curl http://localhost:3001/api/templates/teams/<teamId> | jq .agentTemplateIds
-
-# Check which agent templates exist
-curl http://localhost:3001/api/templates/agents | jq '.[].id'
-```
-
-Update the team template to reference only existing agent templates:
-
-```bash
-curl -X PATCH http://localhost:3001/api/templates/teams/<teamId> \
-  -H "Content-Type: application/json" \
-  -d '{ "agentTemplateIds": ["tmpl_abc", "tmpl_def"] }'
-```
+1. Check the SSH key is set up — go to **Settings → SSH Keys** in the UI
+2. Test the connection from your terminal: `ssh -T git@github.com`
+3. Make sure the key has read/write access to the repository
 
 ---
 
-## Delegation not triggering
+## Something else is wrong
 
-**Symptom:** Agent output contains `<CALL_AGENT name="X">...</CALL_AGENT>` as literal text instead of triggering a delegation.
-
-**Cause:**
-- The target agent name doesn't match exactly (case-sensitive)
-- Delegation depth limit (5) was reached
-- The tag was inside a code block (` ``` `) — the server only scans text output, not code blocks
-
-**Fix:**
-
-1. Check the target agent's name exactly: `curl http://localhost:3001/api/agents | jq '.[].name'`
-2. Ensure the agent's mission tells it to use the exact `name` attribute
-3. Check server logs for delegation errors
-
----
-
-## High memory usage
-
-**Symptom:** Server process grows over time with many active agents.
-
-**Cause:** Stream buffers and tool event history accumulate in memory and are not garbage-collected aggressively.
-
-**Fix:**
-- Call `agent:newConversation` on idle agents to clear their stream buffers
-- Restart the server periodically — state is fully recovered from disk
-- For production, set up a cron job or PM2 `restart` schedule (see [Deployment](./deployment))
+Check the server logs in your terminal — errors are printed there with context. If the issue persists, [open an issue on GitHub](https://github.com/pierredosne/my-team/issues).

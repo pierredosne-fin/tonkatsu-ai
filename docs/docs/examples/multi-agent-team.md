@@ -6,35 +6,38 @@ sidebar_position: 2
 
 # Multi-Agent Team
 
-This example sets up a two-agent team where a **project manager** orchestrates research and writing, delegating to a **documentation writer**. You'll see real-time delegation in the UI and learn how to package the team as a reusable template.
+This example sets up two assistants that work together: a **coordinator** that manages the work, and a **writer** that handles the actual writing. The coordinator delegates — the writer delivers.
 
-## The setup
+## The idea
 
-| Agent | Name | Role |
-|-------|------|------|
-| Orchestrator | `pm` | Breaks down goals, delegates, synthesizes results |
-| Specialist | `doc-writer` | Writes structured technical documentation |
+Instead of one assistant doing everything, you split responsibilities:
 
-## 1. Create the `doc-writer` agent
+- The **coordinator** (`pm`) understands the goal, breaks it down, and knows when to delegate
+- The **writer** (`doc-writer`) is a specialist — given clear instructions, it produces great output
 
-Click **+ New Agent** and fill in:
+You talk only to the coordinator. It handles the rest.
+
+## Step 1 — Create the writer
+
+Click **+ New Agent**:
 
 **Name:** `doc-writer`
 
 **Mission:**
 ```
 You are a technical documentation writer. When given a topic and source material,
-you produce clear, accurate, developer-oriented documentation. Your output is
-always in markdown with:
-- A brief intro paragraph
-- Structured sections with headers
+you write clear, developer-friendly documentation in markdown.
+
+Your output always includes:
+- A short intro paragraph
+- Structured sections with headings
 - Code examples where relevant
 - A "Key takeaways" section at the end
 
-Be concise. Developers scan, not read.
+Be concise. Write for people who scan, not read.
 ```
 
-## 2. Create the `pm` agent
+## Step 2 — Create the coordinator
 
 Click **+ New Agent** again:
 
@@ -42,145 +45,77 @@ Click **+ New Agent** again:
 
 **Mission:**
 ```
-You are a project manager and technical lead. When given a goal:
-1. Break it into concrete subtasks
-2. Delegate writing tasks to the doc-writer agent using <CALL_AGENT name="doc-writer">
-3. Review the output and synthesize a final result
+You are a project coordinator. When given a goal:
+1. Break it into concrete tasks
+2. Delegate writing to the doc-writer using <CALL_AGENT name="doc-writer">
+3. Review what comes back and present a final result
 
-Always delegate documentation work — do not write docs yourself.
-Use <CALL_AGENT name="doc-writer">...</CALL_AGENT> to hand off tasks.
+Always delegate documentation — never write it yourself.
 ```
 
-## 3. Trigger a delegation
+## Step 3 — Send a task to the coordinator
 
-Open the ChatModal for `pm` and send:
+Open the chat for `pm` and send:
 
 ```
-Create developer documentation for Tonkatsu's Socket.IO API.
-Cover: how to connect, the agent:sendMessage event, and real-time streaming.
+Write documentation for how Tonkatsu's real-time streaming works.
+Cover: what streaming is, why it matters, and how to use it.
 ```
 
-Watch what happens in the UI:
+Watch what happens in the office:
 
-**Step 1 — PM thinks:**
-```
-The pm agent analyzes the task and decides to delegate the writing.
-```
+**The coordinator thinks**, then produces something like:
 
-**Step 2 — PM delegates:**
-
-The PM's output contains:
 ```xml
 <CALL_AGENT name="doc-writer">
-Write developer documentation for the Tonkatsu Socket.IO API covering:
-
-1. How to connect to the Socket.IO server
-2. The agent:sendMessage client→server event (payload shape, when to use it)
-3. Real-time streaming via agent:stream (how chunks accumulate, example code)
-
-Format as markdown with code examples. Target audience: JavaScript developers.
+Write documentation covering real-time streaming in Tonkatsu:
+1. What streaming is (text arriving word by word vs. all at once)
+2. Why it matters (faster perceived response, live feedback)
+3. How it works (Socket.IO agent:stream events)
+Include a short code example showing how to listen for stream events.
 </CALL_AGENT>
 ```
 
-**Step 3 — Server dispatches:**
+**The server intercepts this tag** and:
+1. Sends the task to `doc-writer`
+2. `doc-writer` starts running — you see it working in its room
+3. When `doc-writer` finishes, its result flows back to `pm`
+4. `pm` reviews and presents the final answer to you
 
-The server intercepts the `<CALL_AGENT>` tag and:
-1. Looks up the agent named `doc-writer`
-2. Emits `agent:delegating { fromId: pm.id, toName: "doc-writer", prompt: "..." }`
-3. Calls `claudeService.runTask(doc-writer.id, prompt, depth=1)`
+In the UI you see both assistants active, with a "delegating" badge showing the handoff.
 
-**Step 4 — You see in the UI:**
-
-```
-pm        [running] → delegating to doc-writer...
-doc-writer [running] ← receiving task from pm
-doc-writer [running] ... streaming documentation ...
-doc-writer [idle]   ← complete
-pm        [running] ← receiving doc-writer's result
-pm        [idle]    ← synthesizing and presenting final answer
-```
-
-**Step 5 — PM presents the result:**
-
-The PM receives `doc-writer`'s markdown output, reviews it, and presents a final summary to you.
-
-## 4. Delegation event flow
+## What you observe in real time
 
 ```
-pm receives user message
-       │
-       ▼
-claudeService.runTask(pm.id, message, depth=0)
-       │
-       │  pm output contains <CALL_AGENT name="doc-writer">
-       │
-       ▼
-server emits agent:delegating
-       │
-       ▼
-claudeService.runTask(doc-writer.id, inner_prompt, depth=1)
-       │  doc-writer streams its response
-       │
-       ▼
-server emits agent:delegationComplete
-       │
-       ▼
-doc-writer output injected into pm's session context
-       │
-       ▼
-pm continues, references doc-writer's work in final response
+pm          → Running (thinking about the task)
+pm          → Delegating to doc-writer...
+doc-writer  → Running (writing the documentation)
+doc-writer  → Idle (done)
+pm          → Running (reviewing and wrapping up)
+pm          → Idle (task complete)
 ```
 
-## 5. Delegation limits
+## Adding a third assistant
 
-Delegation depth is capped at **5** to prevent infinite loops. An agent at depth 5 that tries to delegate further will have its `<CALL_AGENT>` tag returned as a literal string with an error message injected, rather than triggering a recursive call.
-
-Example deep chain (allowed):
-```
-pm (depth 0)
-  → analyst (depth 1)
-    → data-fetcher (depth 2)
-      → validator (depth 3)
-        → formatter (depth 4)  ← last allowed delegation
-```
-
-## 6. Adding a third agent
-
-Extend the team with a `reviewer` agent:
+You can extend the chain. Add a `reviewer`:
 
 **Mission:**
 ```
 You are a senior technical reviewer. When given documentation to review:
-1. Check for accuracy and completeness
-2. Flag any missing edge cases
-3. Suggest concrete improvements (not general "be clearer" feedback)
-Return your review as a structured list of findings.
+- Check for accuracy and completeness
+- Flag anything missing or unclear
+- Give specific, actionable feedback (not general "be clearer" notes)
+Return a bullet list of findings.
 ```
 
-Update `pm`'s mission to include:
+Update `pm`'s mission to pass the writer's output to the reviewer before presenting the final result. Now the pipeline is:
 
 ```
-After doc-writer produces documentation, pass it to the reviewer:
-<CALL_AGENT name="reviewer">
-Review this documentation and flag any issues:
-[doc-writer's output]
-</CALL_AGENT>
+pm → doc-writer → reviewer → pm → you
 ```
 
-Now the PM orchestrates a two-step pipeline: write → review → synthesize.
+## Saving the team as a template
 
-## 7. Save as a team template
+Once you're happy with the team, click **Save as Template** in the top-right controls.
 
-Once you're happy with the team, click **Save as Template** in the HUD.
-
-This creates a team template in `workspaces/templates.json` with references to snapshots of all three agents.
-
-To reinstantiate the team later:
-
-```bash
-curl -X POST http://localhost:3001/api/templates/teams/<templateId>/instantiate \
-  -H "Content-Type: application/json" \
-  -d '{ "teamId": "docs-squad-v2" }'
-```
-
-This creates fresh agent instances with the same missions and settings — ready to work immediately.
+This saves a blueprint of all three assistants. Next time you need this team, click the template and it recreates everyone instantly — ready to work.
