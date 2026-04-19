@@ -29,6 +29,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=5173
 
+RUN apk add --no-cache git openssh-client
+
 # Only install server production deps
 COPY package.json package-lock.json ./
 COPY server/package.json ./server/
