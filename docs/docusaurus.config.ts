@@ -54,7 +54,7 @@ const config: Config = {
           position: 'right',
         },
         {
-          href: 'https://github.com/pierredosne/my-team',
+          href: 'https://github.com/pierredosne-fin/data-platform-tonkatsu',
           label: 'GitHub',
           position: 'right',
         },
