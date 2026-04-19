@@ -14,8 +14,9 @@ function Hero() {
           <span className={styles.heroTitleAccent}>always at work</span>
         </h1>
         <p className={styles.heroSub}>
-          A virtual office where Claude Code agents run autonomously, collaborate
-          in real time, and delegate tasks to each other — while you stay in control.
+          A self-hosted virtual office where Claude Code agents run autonomously in named rooms,
+          delegate tasks to each other, and stream results live to your browser —
+          while you stay in control.
         </p>
         <div className={styles.heroCtas}>
           <Link className={styles.ctaPrimary} to="/docs/intro">
@@ -59,32 +60,32 @@ const FEATURES = [
   {
     icon: '🏢',
     title: 'Virtual Office Grid',
-    desc: 'Agents live in a 5×3 room grid. See who is running, idle, or waiting for your input — at a glance.',
+    desc: 'Agents occupy rooms in a 5×3 grid. See which agents are running, idle, pending input, or sleeping — at a glance. Click any room to open a chat.',
   },
   {
     icon: '⚡',
     title: 'Real-Time Streaming',
-    desc: 'Every word streams live to the browser via Socket.IO. Tool calls, delegations, and results — all visible.',
+    desc: 'Every token streams live to the browser via Socket.IO. Tool calls, inter-agent delegations, and status changes are all visible as they happen — no polling, no refresh.',
   },
   {
     icon: '🔀',
     title: 'Agent Delegation',
-    desc: 'Agents call each other using a simple tag syntax. Up to 5 levels deep, with full traceability.',
+    desc: 'Agents hand off work to each other using a simple tag: <CALL_AGENT name="analyst">…</CALL_AGENT>. Up to 5 levels deep, with full traceability in the UI.',
   },
   {
     icon: '🌿',
     title: 'Repo-Backed Agents',
-    desc: 'Each agent gets its own git branch and worktree. Code changes tracked, identity kept private.',
+    desc: 'Tie an agent to a git repo. It gets its own branch and worktree — code changes are tracked, identity and memory files stay private via info/exclude.',
   },
   {
     icon: '🕐',
     title: 'Cron Schedules',
-    desc: 'Set agents to run on a schedule. Daily standups, monitoring jobs, data syncs — fully automated.',
+    desc: 'Set agents to run tasks on a cron expression. Daily standups, monitoring alerts, data syncs — all automated, all logged in conversation history.',
   },
   {
     icon: '🧩',
     title: 'Templates & Skills',
-    desc: 'Snapshot any agent or team into a reusable template. Share skills across agents with a library.',
+    desc: 'Snapshot any live agent or team into a reusable template. Reinstantiate with one API call. Share a skill library across all agents to standardize how they work.',
   },
 ];
 
@@ -110,6 +111,58 @@ function Features() {
   );
 }
 
+function HowItWorks() {
+  return (
+    <section className={styles.screenshotSection}>
+      <div className={styles.sectionInner}>
+        <h2 className={styles.sectionTitle}>Up and running in minutes</h2>
+        <p className={styles.sectionSub}>
+          No infrastructure to provision. No database to configure. Just clone, set your API key, and go.
+        </p>
+        <div className={styles.showcaseRow}>
+          <div className={styles.showcaseText}>
+            <div className={styles.showcaseStep}>
+              <span className={styles.stepBadge}>01</span>
+              <div>
+                <strong>Wire up your API key</strong>
+                <p>
+                  Clone the repo, add your Anthropic API key to <code>server/.env</code>, and run{' '}
+                  <code>npm run dev</code>. The office grid loads at localhost:5173.
+                </p>
+              </div>
+            </div>
+            <div className={styles.showcaseStep}>
+              <span className={styles.stepBadge}>02</span>
+              <div>
+                <strong>Create agents with identities</strong>
+                <p>
+                  Each agent gets a name, a mission, and a persistent workspace with identity files
+                  (SOUL.md, OPS.md, MEMORY.md). Give an agent a git repo and it works directly in your codebase.
+                </p>
+              </div>
+            </div>
+            <div className={styles.showcaseStep}>
+              <span className={styles.stepBadge}>03</span>
+              <div>
+                <strong>Send tasks and watch them collaborate</strong>
+                <p>
+                  Agents stream output live, call tools, and hand off work to each other.
+                  They pause when they need you and keep going when you reply.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className={styles.showcaseScreenshot}>
+            <div className={styles.showcasePlaceholder}>
+              {`// Example: PM delegates to analyst\n\nconst pm = await createAgent({\n  name: 'pm',\n  mission: 'Break down goals,\\ndelegate to specialists.',\n});\n\n// PM's output triggers delegation:\n// <CALL_AGENT name="analyst">\n//   Research Q1 AI trends\n// </CALL_AGENT>\n\n// Server intercepts → runs analyst\n// → injects result back into pm\n// → pm synthesizes final answer`}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function Screenshot() {
   return (
     <section className={styles.screenshotSection}>
@@ -126,21 +179,21 @@ function Screenshot() {
               <span className={styles.stepBadge}>01</span>
               <div>
                 <strong>Send a task</strong>
-                <p>Type a message to any agent. It starts immediately — no setup, no prompting.</p>
+                <p>Type a message to any agent. It starts immediately — no setup, no prompting beyond the mission you defined.</p>
               </div>
             </div>
             <div className={styles.showcaseStep}>
               <span className={styles.stepBadge}>02</span>
               <div>
                 <strong>Watch it work</strong>
-                <p>Streaming output, tool calls, and inter-agent delegations appear in real time.</p>
+                <p>Streaming output, tool calls (Bash, Read, Write, WebSearch), and inter-agent delegations appear in real time as the agent works through the task.</p>
               </div>
             </div>
             <div className={styles.showcaseStep}>
               <span className={styles.stepBadge}>03</span>
               <div>
                 <strong>Review & approve</strong>
-                <p>Agents pause when they need you. You stay in the loop without being in the way.</p>
+                <p>Agents pause with <code>&lt;NEED_INPUT&gt;</code> when they hit a decision only you can make. You stay in the loop without being in the way.</p>
               </div>
             </div>
           </div>
@@ -161,7 +214,7 @@ function CTA() {
       <div className={styles.ctaInner}>
         <img src="/img/tonkatsu.png" alt="" className={styles.ctaLogo} aria-hidden />
         <h2 className={styles.ctaTitle}>Ready to build your AI team?</h2>
-        <p className={styles.ctaSub}>Open-source. Self-hosted. No API key sharing required.</p>
+        <p className={styles.ctaSub}>Open-source. Self-hosted. Your API key never leaves your server.</p>
         <div className={styles.heroCtas}>
           <Link className={styles.ctaPrimary} to="/docs/intro">
             Get started
@@ -182,6 +235,7 @@ export default function Home() {
       <main>
         <Hero />
         <Features />
+        <HowItWorks />
         <Screenshot />
         <CTA />
       </main>

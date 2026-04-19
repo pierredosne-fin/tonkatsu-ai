@@ -6,22 +6,68 @@ sidebar_position: 4
 
 # Scheduled Tasks
 
-Agents can run tasks on a cron schedule — useful for daily reports, monitoring jobs, or periodic data syncs.
+Agents can run tasks on a cron schedule — useful for daily standups, monitoring alerts, periodic data syncs, or any recurring automation.
 
-## 1. Open the Schedule modal
+## How scheduling works
 
-Click the **clock icon** on an agent to open the **ScheduleModal**.
+Schedules are stored in `workspaces/schedules.json`. On server startup, `cronService.init()` reads the file and registers `node-cron` jobs. When a job fires, it calls `claudeService.runTask(agentId, message)` — exactly the same code path as a manual user message.
 
-## 2. Add a schedule
+```
+schedules.json
+  ↓ on startup
+cronService registers node-cron jobs
+  ↓ at trigger time
+claudeService.runTask(agentId, message)
+  ↓
+agent:stream events → browser
+  ↓
+output appended to conversation history
+  ↓
+agent returns to idle
+```
+
+## 1. Create a standup bot
+
+Create an agent named `standup` with this mission:
+
+```
+You are a daily standup bot. When triggered, you:
+1. Run: git log --since="yesterday" --oneline --all
+2. Summarize what was committed across all branches
+3. Format the summary as a standup report:
+   - Yesterday: [list of commits grouped by author]
+   - Blockers: [any merge conflicts, failed CI, open PRs > 3 days old]
+4. Keep the report under 200 words
+```
+
+Give it `Bash` permission so it can run git commands.
+
+## 2. Open the Schedule modal
+
+Click the **clock icon** on the standup agent's room (or in the AgentSidebar). This opens the **ScheduleModal**.
+
+## 3. Add a schedule
 
 Fill in:
 
-| Field | Example |
-|-------|---------|
-| Cron expression | `0 9 * * 1-5` *(weekdays at 9am)* |
-| Message | `Generate the daily standup report for the team.` |
+| Field | Value |
+|-------|-------|
+| Cron expression | `0 9 * * 1-5` |
+| Message | `Run the daily standup. Check git log since yesterday and format a team report.` |
 
-Common cron expressions:
+Click **Add Schedule**.
+
+## Cron expression reference
+
+```
+┌─────── minute (0–59)
+│ ┌───── hour (0–23)
+│ │ ┌─── day of month (1–31)
+│ │ │ ┌─ month (1–12)
+│ │ │ │ ┌ day of week (0–7, 0 and 7 = Sunday)
+│ │ │ │ │
+* * * * *
+```
 
 | Schedule | Expression |
 |----------|-----------|
@@ -29,48 +75,79 @@ Common cron expressions:
 | Daily at 8am | `0 8 * * *` |
 | Weekdays at 9am | `0 9 * * 1-5` |
 | Every 30 minutes | `*/30 * * * *` |
+| Every Monday at 10am | `0 10 * * 1` |
+| First of month at noon | `0 12 1 * *` |
 
-## 3. How it works
+## 4. View scheduled run output
 
-Schedules are persisted in `workspaces/schedules.json`. On startup, `cronService.ts` reads this file and registers `node-cron` jobs.
-
-When a job fires, it calls `agent:sendMessage` internally — the same path as a user message. The agent runs, streams output, and returns to idle.
-
-## 4. View schedule history
-
-Open the **ChatModal** for the agent. Scheduled runs appear in the conversation history alongside manual messages.
+Scheduled runs appear in the agent's **ChatModal** alongside manual messages — you can see the standup bot's output without sending it a message yourself. Each run is a full conversation turn: user message (the schedule trigger) + agent response.
 
 ## 5. Manage via API
 
-You can also manage schedules via the REST API:
-
 ```bash
-# Create a schedule
-POST /api/schedules
-{
-  "agentId": "abc123",
-  "cron": "0 9 * * 1-5",
-  "message": "Generate the daily standup report."
-}
+# List all schedules
+curl http://localhost:3001/api/schedules
 
-# List schedules
-GET /api/schedules
+# Create a schedule
+curl -X POST http://localhost:3001/api/schedules \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agentId": "agent_xyz789",
+    "cron": "0 9 * * 1-5",
+    "message": "Run the daily standup."
+  }'
 
 # Delete a schedule
-DELETE /api/schedules/:id
+curl -X DELETE http://localhost:3001/api/schedules/<scheduleId>
 ```
 
-## 6. Example: Daily standup bot
+**Schedule object:**
+```ts
+{
+  id: string;
+  agentId: string;
+  cron: string;          // cron expression
+  message: string;       // message sent to the agent
+  createdAt: string;     // ISO 8601
+  lastRunAt: string | null;
+  nextRunAt: string | null;
+}
+```
 
-Create an agent named `standup` with this mission:
+## 6. Example use cases
+
+### Monitoring agent
+
+**Mission:** Check system health every 15 minutes. Alert via Slack if any service is down.
 
 ```
-You are a standup bot. Each morning, you:
-1. Check the git log for commits since yesterday
-2. Summarize what was done
-3. Post a formatted standup message
+Schedule: */15 * * * *
+Message: Check the health of all services (run: curl -s http://api.internal/health)
+         and post a Slack message to #alerts if any service returns non-200.
 ```
 
-Schedule it with `0 9 * * 1-5` and message `Run the daily standup.`
+### Weekly report agent
 
-The bot will run every weekday morning and produce a summary of the team's previous day's work.
+**Mission:** Every Friday afternoon, summarize the week's GitHub activity.
+
+```
+Schedule: 0 16 * * 5
+Message: Pull the GitHub activity for this week (run: gh pr list --state merged --limit 20)
+         and write a weekly summary in CHANGELOG format.
+```
+
+### Data sync agent
+
+**Mission:** Each night, sync data from the source database to the data warehouse.
+
+```
+Schedule: 0 2 * * *
+Message: Run the nightly ETL sync (run: python scripts/etl_sync.py --date yesterday).
+         Log any errors to memory/etl-errors.md.
+```
+
+## 7. Server restart behavior
+
+When the server restarts, `cronService.init()` re-reads `schedules.json` and re-registers all jobs. No schedules are lost. If the server was down during a scheduled time, the missed runs are **not** replayed — the agent picks up at the next scheduled time.
+
+If you need guaranteed execution, consider wrapping the agent trigger in a process monitor that checks for missed runs on startup (see [Deployment](../deployment) for PM2 setup).

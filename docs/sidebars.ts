@@ -32,6 +32,15 @@ const sidebars: SidebarsConfig = {
         'examples/scheduled-tasks',
       ],
     },
+    {
+      type: 'category',
+      label: 'Guides',
+      items: [
+        'troubleshooting',
+        'security',
+        'deployment',
+      ],
+    },
   ],
 };
 

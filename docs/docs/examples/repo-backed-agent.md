@@ -6,40 +6,84 @@ sidebar_position: 3
 
 # Repo-Backed Agent
 
-A repo-backed agent works directly inside a git repository. Its code changes are tracked in git, while its identity (SOUL.md, MEMORY.md, etc.) stays private.
+A repo-backed agent works directly inside a git repository. Its code changes are tracked in git on a dedicated branch, while its identity files (`SOUL.md`, `MEMORY.md`, etc.) stay private and are never committed.
 
 ## How it works
 
-1. A **bare clone** of the repo is stored in `repos/<repo-slug>/`
-2. A **git worktree** is created at `workspaces/<teamId>/<agentSlug>/` on a per-agent branch
-3. Runtime files (`.claude/**`, `SOUL.md`, `MEMORY.md`, etc.) are excluded from git via `info/exclude`
-
-The agent can read, edit, and commit code in the repo. Its identity files are never committed.
-
-## Setup
-
-### 1. Create the agent with a repo URL
-
-When creating a new agent, set the **Repo URL** field to a git remote:
-
 ```
-git@github.com:your-org/your-repo.git
+repos/
+  my-repo/             ← bare clone (git remote)
+
+workspaces/default/my-agent/
+  ├── (tracked by git)    ← your repo's files
+  ├── SOUL.md             ← git-ignored via info/exclude
+  ├── USER.md             ← git-ignored
+  ├── OPS.md              ← git-ignored
+  ├── MEMORY.md           ← git-ignored
+  ├── TOOLS.md            ← git-ignored
+  ├── memory/             ← git-ignored
+  └── .claude/            ← git-ignored
 ```
 
-The server will:
-- Clone the repo into `repos/`
-- Create a branch `agent/<agentSlug>`
-- Set up a worktree at the agent's workspace path
+The workspace is a git worktree checked out to branch `agent/<agentSlug>`. The agent's runtime files are excluded via `.git/info/exclude` — they exist on disk but git never sees them.
 
-### 2. Configure SSH keys
+## 1. Add an SSH key
 
-Repo-backed agents use SSH to clone and push. Go to **Settings → SSH Keys** in the UI and add the private key for the repo.
+Before creating the agent, configure SSH access for the repo host.
 
-Keys are stored in `.sync-data/ssh-keys/` (chmod 600) and never committed.
+In the UI, go to **Settings → SSH Keys** and add the private key that has read/write access to your repo. Keys are stored in `.sync-data/ssh-keys/` with `chmod 600` and are never committed to git.
 
-### 3. Give the agent coding permissions
+Alternatively, ensure the key is in your system's SSH agent (`ssh-add ~/.ssh/my_key`) — the server inherits the agent's SSH environment.
 
-In the agent's **Permissions** panel, add:
+## 2. Create the agent with a repo URL
+
+Click **+ New Agent** and fill in:
+
+**Name:** `code-agent`
+
+**Mission:**
+```
+You are a software engineer working in this repository. When asked to implement
+a feature or fix a bug:
+1. Read the relevant files first to understand the existing patterns
+2. Make targeted, minimal changes
+3. Run tests if a test command exists
+4. Commit your changes with a descriptive message following the repo's conventions
+```
+
+**Repo URL:** `git@github.com:your-org/your-repo.git`
+
+Click **Create**.
+
+The server runs (in sequence):
+```bash
+# 1. Bare clone (if not already cloned)
+git clone --bare git@github.com:your-org/your-repo.git repos/your-repo/
+
+# 2. Create agent branch
+git -C repos/your-repo/ branch agent/code-agent
+
+# 3. Create worktree
+git -C repos/your-repo/ worktree add \
+  /path/to/workspaces/default/code-agent \
+  agent/code-agent
+
+# 4. Write info/exclude to hide runtime files
+echo ".claude/
+SOUL.md
+USER.md
+OPS.md
+MEMORY.md
+TOOLS.md
+memory/
+.mcp.json" >> workspaces/default/code-agent/.git/info/exclude
+```
+
+The agent's workspace is now your repo's working tree. Any files it reads, edits, or creates are the actual repo files.
+
+## 3. Grant coding permissions
+
+In the agent's **Permissions** tab, add:
 
 ```
 Bash
@@ -50,19 +94,78 @@ Glob
 Grep
 ```
 
-This allows the agent to run shell commands and modify files in the repo.
+This allows the agent to run shell commands, navigate the filesystem, and edit files.
 
-### 4. Example task
+## 4. Send a coding task
 
-Send the agent:
+Open the ChatModal and send:
 
 ```
-Review the open issues in this repo and create a fix for the most critical bug.
-Commit your changes with a descriptive message.
+Look at the open issues in this repo (run: gh issue list --limit 5).
+Pick the most critical bug, implement a fix, and commit it.
 ```
 
-The agent will use `Bash` to run git commands, read files, make edits, and commit — all within its worktree.
+The agent will:
 
-## Workspace isolation
+1. Run `Bash: gh issue list --limit 5` — reads open issues
+2. Run `Read` on relevant source files — understands the code
+3. Run `Edit` to make changes — modifies the files
+4. Run `Bash: git diff` — verifies the changes
+5. Run `Bash: git add -p && git commit -m "fix: ..."` — commits
 
-Each repo-backed agent gets its own branch. Multiple agents can work on the same repo simultaneously without conflicts. Use `git merge` to combine their work when ready.
+The commit goes to branch `agent/code-agent` in the bare clone at `repos/your-repo/`.
+
+## 5. Review and merge
+
+To review what the agent committed:
+
+```bash
+# In the repos/ bare clone
+git -C repos/your-repo/ log agent/code-agent --oneline -5
+
+# Or push the branch to GitHub for a PR
+git -C repos/your-repo/ push origin agent/code-agent
+```
+
+Create a PR from `agent/code-agent` → `main` in your normal GitHub workflow. Code review as usual.
+
+## 6. Multiple agents on the same repo
+
+Each agent gets its own branch. You can run multiple agents on the same codebase simultaneously:
+
+```
+agent/feature-agent   ← agent_1 working on feature X
+agent/bug-agent       ← agent_2 fixing bug Y
+agent/refactor-agent  ← agent_3 refactoring module Z
+```
+
+There are no conflicts at the worktree level — each agent has its own working tree pointing to its own branch. Merge their work via `git merge` or PRs when ready.
+
+## 7. Keeping branches in sync
+
+If the main branch advances while an agent is working:
+
+```bash
+# Inside the agent's worktree
+git fetch origin
+git rebase origin/main
+```
+
+Or send the agent a message:
+
+```
+Rebase your branch on the latest main before continuing.
+```
+
+The agent can run `git fetch` and `git rebase` itself if it has `Bash` permission.
+
+## Troubleshooting
+
+**Clone fails:** Check that the SSH key is loaded and has repo access. Test with `ssh -T git@github.com` from the server's environment.
+
+**Worktree already exists:** If a previous agent used the same slug, delete its worktree first:
+```bash
+git -C repos/your-repo/ worktree remove workspaces/default/code-agent --force
+```
+
+**Uncommitted changes block rebase:** The agent needs to commit or stash before rebasing. Send a message: `Stash your changes, rebase on main, then pop the stash.`
