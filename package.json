@@ -7,9 +7,16 @@
     "dev": "concurrently --kill-others --kill-others-on-fail -n client,server -c cyan,yellow \"npm run dev -w client\" \"npm run dev -w server\"",
     "dev:all": "concurrently --kill-others --kill-others-on-fail -n client,server,docs -c cyan,yellow,magenta \"npm run dev -w client\" \"npm run dev -w server\" \"npm --prefix docs run start\"",
     "build": "npm run build -w client && npm run build -w server",
-    "docs:dev": "npm --prefix docs run start"
+    "docs:dev": "npm --prefix docs run start",
+    "prepare": "husky"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "@commitlint/cli": "^19.6.0",
+    "@commitlint/config-conventional": "^19.6.0",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
+    "concurrently": "^8.2.2",
+    "husky": "^9.1.7",
+    "semantic-release": "^24.2.0"
   }
 }
