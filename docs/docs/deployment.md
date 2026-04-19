@@ -26,7 +26,15 @@ Create `server/.env` on the production machine:
 ANTHROPIC_API_KEY=sk-ant-...
 PORT=3001
 NODE_ENV=production
+READ_ONLY=false   # set to true to disable write operations (see Scaling below)
 ```
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ANTHROPIC_API_KEY` | Yes | Your Anthropic API key. Never sent to the browser. |
+| `PORT` | No | Server port. Defaults to `3001`. |
+| `NODE_ENV` | No | Set to `production` to suppress dev warnings. |
+| `READ_ONLY` | No | `true` or `1` — disables all write operations. See [Scaling](#scaling). |
 
 Never commit `.env`. Use a secrets manager (AWS Secrets Manager, Vault, 1Password Secrets Automation) for team deployments.
 
@@ -257,6 +265,113 @@ pm2 restart tonkatsu  # or systemctl restart tonkatsu
 ```
 
 State in `workspaces/` is preserved across upgrades — no migrations needed. If the agent data format changes between versions, check the release notes for migration instructions.
+
+---
+
+## Scaling {#scaling}
+
+Tonkatsu's default single-instance model keeps things simple. For higher availability or larger teams, read-only mode enables a straightforward horizontal scaling pattern without any coordination layer.
+
+### The scaling model
+
+Tonkatsu uses JSON files on disk for all persistence (`workspaces/`, `repos/`). This means multiple server instances can share state by pointing at the same filesystem:
+
+```
+                    ┌─────────────────────────────────┐
+                    │   Shared persistent volume       │
+                    │   (NFS / AWS EFS / POSIX FS)     │
+                    │                                  │
+                    │   workspaces/                    │
+                    │   repos/                         │
+                    └──────────┬──────────────────────┘
+                               │ mounted read-write
+              ┌────────────────┼────────────────────┐
+              │                │                    │
+    ┌─────────▼──────┐  ┌──────▼─────────┐  ┌──────▼─────────┐
+    │  Writer         │  │  Reader (RO)   │  │  Reader (RO)   │
+    │  READ_ONLY=false│  │  READ_ONLY=true│  │  READ_ONLY=true│
+    │  :3001          │  │  :3002         │  │  :3003         │
+    └─────────────────┘  └────────────────┘  └────────────────┘
+              │                │                    │
+              └────────────────┴────────────────────┘
+                               │
+                    ┌──────────▼──────────┐
+                    │   nginx load balancer│
+                    │   (upstream)         │
+                    └─────────────────────┘
+```
+
+- **One writer instance** — handles all mutations: creating/deleting agents, running tasks, updating workspace files
+- **Multiple read-only instances** — serve the UI and stream agent output; all write-capable REST endpoints return `403`, write socket events are no-ops
+- **No coordination layer** — the shared filesystem is the single source of truth
+
+### Shared filesystem options
+
+Any POSIX-compatible network filesystem works:
+
+| Option | Notes |
+|--------|-------|
+| AWS EFS | Managed, elastic. Good default for AWS deployments. |
+| NFS | Simple, works anywhere. Watch for latency on writes. |
+| GlusterFS | Distributed, no single point of failure. |
+| Local path | Only valid if all instances run on the same machine (e.g. multiple ports). |
+
+Mount the volume at the `workspaces/` and `repos/` paths on every instance:
+
+```bash
+# Example: mount EFS on each host
+sudo mount -t nfs4 \
+  fs-xxxxxxxx.efs.us-east-1.amazonaws.com:/ \
+  /opt/tonkatsu/workspaces
+```
+
+### nginx upstream configuration
+
+```nginx
+upstream tonkatsu_readers {
+    server 10.0.0.2:3001;   # read-only instance
+    server 10.0.0.3:3001;   # read-only instance
+    server 10.0.0.4:3001;   # read-only instance
+}
+
+upstream tonkatsu_writer {
+    server 10.0.0.1:3001;   # single writer instance
+}
+
+server {
+    listen 443 ssl http2;
+    server_name tonkatsu.yourdomain.com;
+
+    # Route write operations to the writer
+    location ~ ^/api/(agents|templates|schedules|skills) {
+        limit_except GET OPTIONS {
+            proxy_pass http://tonkatsu_writer;
+        }
+        proxy_pass http://tonkatsu_readers;  # GETs go to readers
+        include /etc/nginx/proxy_params;
+    }
+
+    # All Socket.IO traffic (streaming) goes to readers
+    location /socket.io/ {
+        proxy_pass http://tonkatsu_readers;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        include /etc/nginx/proxy_params;
+        proxy_read_timeout 300s;
+    }
+
+    # Static assets — any instance
+    location / {
+        proxy_pass http://tonkatsu_readers;
+        include /etc/nginx/proxy_params;
+    }
+}
+```
+
+:::note
+Socket.IO connections are stateful — a client that connects to one reader instance must stay on that instance for the duration of the connection. Enable `ip_hash` in the upstream block if sticky sessions aren't handled at the load balancer level.
+:::
 
 ---
 

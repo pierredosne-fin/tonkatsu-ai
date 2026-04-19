@@ -101,6 +101,34 @@ repos/
 
 You can edit any of these files directly on disk or via the **AgentSidebar** in the UI.
 
+## Read-only mode
+
+Read-only mode lets you expose the Tonkatsu UI — so anyone can view agents, read conversation history, and watch streams — without granting write access. Agents cannot be created, modified, or deleted, and write-capable socket events (`agent:sleep`, `agent:newConversation`, `agent:moveRoom`) are silently ignored.
+
+Enable it by setting an environment variable:
+
+```env
+# server/.env
+READ_ONLY=true   # or READ_ONLY=1
+```
+
+On startup the server logs:
+```
+[startup] READ_ONLY mode enabled — write operations are disabled
+```
+
+The client fetches `GET /api/config` on load and receives `{ "readOnly": true }`, which disables write actions in the UI automatically.
+
+**What is still allowed in read-only mode:**
+- Viewing all agents, teams, and conversation history
+- Subscribing to real-time streams (Socket.IO)
+- Triggering an agent via `POST /api/agents/:id/trigger` (the one write exception)
+
+**When to use it:**
+- **Demos** — let stakeholders view agents working without risk of accidental changes
+- **Shared/untrusted environments** — expose the UI on a shared network without granting write access
+- **Horizontal scaling** — run multiple read-only instances behind a load balancer with one writer instance (see [Deployment → Scaling](./deployment#scaling))
+
 ## Building for production
 
 ```bash
