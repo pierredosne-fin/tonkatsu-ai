@@ -1,76 +1,64 @@
-# Tonkatsu
+<div align="center">
+  <img src="docs/static/img/tonkatsu.png" alt="Tonkatsu" height="96" style="border-radius: 12px;" />
+  <h1>Tonkatsu</h1>
+  <p><strong>A self-hosted virtual office for AI agents.</strong><br/>Multiple Claude Code agents running autonomously, collaborating in real time, and streaming live to your browser.</p>
 
-A virtual office platform where multiple Claude Code AI agents run autonomously in named rooms, collaborate in real time, and delegate tasks to each other.
+  [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+  [![CI](https://github.com/pierredosne-fin/data-platform-tonkatsu/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/pierredosne-fin/data-platform-tonkatsu/actions)
+  [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-brightgreen)](https://pierredosne-fin.github.io/data-platform-tonkatsu/)
+  [![Node](https://img.shields.io/badge/node-%3E%3D20-green)](https://nodejs.org)
+</div>
 
-## Features
+---
 
-- Multi-agent workspace with a 5×3 room grid per team
-- Real-time collaboration via Socket.IO
-- Inter-agent task delegation with recursive call depth control
-- Repo-backed agents using git worktrees
-- Session persistence across server restarts
-- Agent and team templates with one-click instantiation
-- Semantic versioning + automated Docker image releases
+## What is Tonkatsu?
 
-## Stack
+Tonkatsu is an open-source platform where you build a team of AI agents, give each one a role and a workspace, and watch them collaborate — without babysitting every step.
 
-| Layer | Technology |
-|-------|-----------|
-| Backend | Express + Socket.IO, ESM TypeScript (`tsx watch`) |
-| Frontend | React 19 + Vite, Zustand |
-| AI | `@anthropic-ai/claude-agent-sdk`, `claude-sonnet-4-6` |
-| Container | Docker (multi-stage), GitHub Container Registry |
-| CI/CD | GitHub Actions — PR checks, develop builds, semantic release |
+- **Visual office grid** — agents occupy rooms in a 5×3 grid. See who is running, idle, or waiting for your input at a glance.
+- **Real-time streaming** — every token streams live to the browser via Socket.IO. No polling, no refresh.
+- **Agent delegation** — agents hand off work to each other automatically, up to 5 levels deep. You talk to the coordinator; it handles the rest.
+- **Persistent memory** — agents remember what they've learned across sessions. Conversations survive server restarts.
+- **Repo-backed agents** — tie an agent to a git repository. It gets its own branch and worktree, reads and commits code, and keeps identity files private.
+- **Cron scheduling** — run agents on a cron expression. Daily reports, monitoring alerts, data syncs — fully automated.
+- **Templates** — snapshot any live agent or team configuration and reinstantiate it with one API call.
+- **Self-hosted** — your Anthropic API key and data never leave your server.
 
-## Getting started
+---
+
+## Quick start
 
 ### Prerequisites
 
 - Node.js 20+
-- An Anthropic API key
+- An [Anthropic API key](https://console.anthropic.com)
 
-### Install
+### Install & run
 
 ```bash
+git clone https://github.com/pierredosne-fin/data-platform-tonkatsu.git
+cd data-platform-tonkatsu
 npm install
 ```
-
-### Configure
 
 Create `server/.env`:
 
 ```env
 ANTHROPIC_API_KEY=sk-ant-...
-PORT=3001          # optional, defaults to 3001
+PORT=3001   # optional, defaults to 3001
 ```
 
-### Run
-
 ```bash
-# Client + server (recommended)
 npm run dev
-
-# Server only (auto-reloads on src/ changes)
-npm run dev -w server
-
-# Client only
-npm run dev -w client
-
-# Client + server + docs
-npm run dev:all
 ```
 
-The server listens on `http://localhost:3001` and the client on `http://localhost:5173` (Vite default).
+| Service | URL |
+|---------|-----|
+| App (client) | http://localhost:5173 |
+| API (server) | http://localhost:3001 |
+| Docs (local) | http://localhost:3000 (`npm run docs:dev`) |
 
-## Building
-
-```bash
-npm run build
-```
-
-Outputs:
-- `client/dist/` — static Vite bundle
-- `server/dist/` — compiled TypeScript
+---
 
 ## Docker
 
@@ -79,45 +67,88 @@ docker build -t tonkatsu .
 docker run -e ANTHROPIC_API_KEY=sk-ant-... -p 3001:3001 tonkatsu
 ```
 
-The multi-stage Dockerfile produces a lean production image using only server production dependencies.
+Production images are published to GitHub Container Registry on every release:
+
+```bash
+docker pull ghcr.io/pierredosne-fin/data-platform-tonkatsu:latest
+```
+
+---
+
+## Tech stack
+
+| Layer | Technology |
+|-------|-----------|
+| Backend | Express + Socket.IO, ESM TypeScript (`tsx watch`) |
+| Frontend | React 19 + Vite, Zustand |
+| AI | `@anthropic-ai/claude-agent-sdk` · `claude-sonnet-4-6` |
+| Container | Docker (multi-stage) · GitHub Container Registry |
+| CI/CD | GitHub Actions · semantic-release |
+| Docs | Docusaurus 3 · GitHub Pages |
+
+---
 
 ## Project structure
 
 ```
 .
-├── client/          # React 19 + Vite frontend
-├── server/          # Express + Socket.IO backend
+├── client/               # React 19 + Vite frontend
+│   └── src/
+├── server/               # Express + Socket.IO backend
 │   └── src/
 │       └── services/
-│           ├── agentService.ts      # Agent lifecycle & persistence
-│           ├── claudeService.ts     # Claude SDK execution
-│           ├── persistenceService.ts
-│           └── roomService.ts
-├── workspaces/      # Agent workspaces on disk (gitignored)
-├── repos/           # Bare git clones for repo-backed agents (gitignored)
-├── docs/            # Docusaurus documentation site
+│           ├── agentService.ts       # Agent lifecycle & persistence
+│           ├── claudeService.ts      # Claude SDK execution & delegation
+│           ├── persistenceService.ts # Disk state (agents, schedules, templates)
+│           └── roomService.ts        # 5×3 room grid management
+├── docs/                 # Docusaurus documentation site
+├── workspaces/           # Agent workspaces on disk (gitignored)
+├── repos/                # Bare git clones for repo-backed agents (gitignored)
 ├── Dockerfile
 └── CLAUDE.md
 ```
 
+---
+
 ## CI/CD
 
-| Workflow | Trigger | Steps |
-|----------|---------|-------|
-| `pr-checks.yml` | PR → `main` or `develop` | Lint, type-check, build |
-| `develop.yml` | Push → `develop` | Lint, type-check, build, Docker push |
-| `release.yml` | Push → `main` | Lint, build → semantic-release → Docker push to GHCR |
+| Workflow | Trigger | What it does |
+|----------|---------|-------------|
+| `pr-checks.yml` | PR → `main` | Lint · type-check · build |
+| `release.yml` | Push → `main` | Lint · build · Docker push (`dev-<sha>`) |
+| `manual-release.yml` | Manual (`workflow_dispatch`) | Semantic release · Docker (`vX.Y.Z` + `latest`) · Docs deploy |
+| `docs.yml` | Push → `main` | Build & deploy Docusaurus to GitHub Pages |
 
-Docker images are published to `ghcr.io/<owner>/tonkatsu` and tagged `vX.Y.Z` + `latest`.
+Trigger a release manually from **Actions → Manual Release → Run workflow**.
 
-## Docs site
+---
+
+## Documentation
+
+Full documentation is available at **[pierredosne-fin.github.io/data-platform-tonkatsu](https://pierredosne-fin.github.io/data-platform-tonkatsu/)**.
+
+To run docs locally:
 
 ```bash
-npm run docs:dev
+cd docs && npm install && npm run start
 ```
 
-Built with Docusaurus, available at `http://localhost:3000`.
+---
+
+## Contributing
+
+1. Fork the repo and create a branch from `main`
+2. Make your changes — every PR runs lint, type-check, and build automatically
+3. Open a pull request against `main`
+
+Commits follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, etc.) — this drives automatic versioning via semantic-release.
+
+---
 
 ## License
 
-Private.
+Copyright 2024-present the Tonkatsu contributors.
+
+Licensed under the **Apache License, Version 2.0**. See [LICENSE](LICENSE) for the full text.
+
+> You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
