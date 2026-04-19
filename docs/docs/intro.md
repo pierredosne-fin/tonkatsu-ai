@@ -7,62 +7,55 @@ sidebar_position: 1
 <div style={{textAlign: 'center', margin: '2rem 0 2.5rem'}}>
   <img src="/img/tonkatsu.png" alt="Tonkatsu" style={{height: '140px', borderRadius: '0.75rem'}} />
   <h1 style={{fontSize: '2.5rem', fontWeight: 800, letterSpacing: '-0.03em', marginTop: '1rem', marginBottom: '0.25rem'}}>Tonkatsu</h1>
-  <p style={{fontSize: '1.1rem', opacity: 0.6, marginBottom: 0}}>A virtual office for Claude Code agents</p>
+  <p style={{fontSize: '1.1rem', opacity: 0.6, marginBottom: 0}}>A virtual office for AI assistants</p>
 </div>
 
-**Tonkatsu** is a self-hosted platform where multiple AI agents run autonomously in named rooms, collaborate in real time, and delegate tasks to each other — all powered by the Anthropic Claude API.
+**Tonkatsu** is a platform where multiple AI assistants work for you simultaneously — each with a specific role, running in the background, collaborating with each other, and asking for your input only when they need a decision.
 
-## What is it?
+## What does it actually do?
 
-Think of it as a physical office, but for AI. Each agent occupies a room on a 5×3 grid, has a persistent workspace on disk, and can chat with users or hand work off to other agents. Agents are powered by `claude-sonnet-4-6` via the `@anthropic-ai/claude-agent-sdk`, running with `permissionMode: 'acceptEdits'` so they can take real actions — reading files, running code, calling APIs — without constant manual approval.
+Imagine a real office floor, but instead of people, it's AI assistants:
 
-Every agent has its own identity defined by a set of markdown files in its workspace: a `SOUL.md` that describes its personality and mission, a `USER.md` with context about the operator, an `OPS.md` playbook for how it should work, a `MEMORY.md` index of long-term knowledge, and a `TOOLS.md` describing its capabilities. These files are injected into the system prompt on each run, giving each agent a stable, coherent identity across conversations.
+- Each assistant has a **name**, a **role**, and a **room** on a visual grid
+- You can see at a glance who is working, who is waiting for you, and who is idle
+- You chat with any assistant by clicking on its room
+- Assistants can **pass work to each other** — a coordinator can ask a specialist to handle a subtask, then use that result to complete the bigger job
+- Everything happens in real time, streaming directly to your browser
 
-## How it works
+## A typical workflow
 
-```
-User sends message
-       │
-       ▼
-Socket.IO → claudeService.query()
-       │
-       ▼
-Anthropic API (claude-sonnet-4-6, up to 200 turns)
-       │
-       ├─ streams text chunks → agent:stream → browser
-       ├─ emits tool calls   → agent:toolCall → browser
-       │
-       └─ output contains <CALL_AGENT name="X">?
-              │ yes
-              ▼
-         recursive call to agent X (max depth 5)
-              │
-              ▼
-         result injected back into original session
-```
+1. You create an assistant and give it a role: *"You are a data analyst. When given a spreadsheet, you summarize the key trends."*
+2. You send it a message: *"Analyze this month's sales data."*
+3. The assistant gets to work — reading files, writing summaries, running calculations
+4. If it needs a decision from you, it pauses and asks
+5. When it's done, it goes back to idle — ready for the next task
 
-When an agent needs human input, it emits `<NEED_INPUT>your question</NEED_INPUT>` in its output. The server sets the agent's status to `pending` and waits. When an agent completes its task, it returns to `idle`. All state is persisted to JSON files so the server can be restarted without losing context.
+No setup per task. No copy-pasting into ChatGPT. The assistant just works.
+
+## What makes it different
+
+| | Tonkatsu | Typical AI chat |
+|--|---------|----------------|
+| Multiple assistants at once | ✅ | ❌ |
+| Assistants collaborate | ✅ | ❌ |
+| Works in the background | ✅ | ❌ |
+| Remembers past conversations | ✅ | Sometimes |
+| Can read and write real files | ✅ | ❌ |
+| Visual overview of all activity | ✅ | ❌ |
+| Scheduled / automated tasks | ✅ | ❌ |
+| Self-hosted (your data stays yours) | ✅ | ❌ |
 
 ## Key features
 
-| Feature | Details |
-|---------|---------|
-| **Multi-agent rooms** | Agents live in a 5×3 visual grid. See who's running, idle, pending, or sleeping at a glance. Click any room to open a chat. |
-| **Real-time streaming** | Text, tool calls, and delegation events stream live to the browser via Socket.IO. No polling, no refresh. |
-| **Inter-agent delegation** | Agents call each other with `<CALL_AGENT name="X">task</CALL_AGENT>`. Up to 5 levels deep, with full traceability in the UI. |
-| **Persistent sessions** | SDK session IDs are stored in `agents.json`. Conversations resume across server restarts without losing context. |
-| **Repo-backed agents** | Tie an agent to a git repo. It gets its own branch + worktree; code changes are tracked, identity files stay private. |
-| **Templates** | Snapshot any live agent or team into a reusable template. Reinstantiate with one API call. |
-| **Cron schedules** | Schedule agents to run tasks on a cron expression. Daily standups, monitoring, data sync — fully automated. |
-| **Skill library** | A shared library of reusable skill files. Inject the right skills into each agent's prompt. |
-| **Workspace sync** | SSH-based sync to push/pull agent workspaces to remote machines. |
+- **Visual office grid** — see all your assistants at a glance. Who's running, idle, waiting for you.
+- **Real-time streaming** — watch assistants work word by word as they think and respond.
+- **Delegation** — assistants hand tasks to each other automatically. You only talk to the coordinator.
+- **Persistent memory** — assistants remember what they've learned across sessions. Conversations survive restarts.
+- **Codebase access** — link an assistant to a Git repository and it can read, edit, and commit code.
+- **Scheduled tasks** — run assistants on a schedule: daily reports, monitoring, data syncs.
+- **Templates** — save a team configuration and recreate it instantly.
+- **Self-hosted** — your API key and data never leave your server.
 
-## Tech stack
+## Built on
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React 19, Vite, TypeScript, Zustand |
-| Backend | Node.js, Express, Socket.IO, TypeScript (ESM) |
-| AI | Anthropic Claude `claude-sonnet-4-6`, `@anthropic-ai/claude-agent-sdk` |
-| Persistence | JSON files on disk — no database, no migrations |
-| Git | Per-agent branches and worktrees for repo-backed workspaces |
+Tonkatsu uses [Anthropic Claude](https://anthropic.com) (the same AI behind Claude.ai) to power every assistant. It's open-source and runs entirely on your own machine or server.

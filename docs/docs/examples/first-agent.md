@@ -6,61 +6,49 @@ sidebar_position: 1
 
 # Your First Agent
 
-This walkthrough creates a coding assistant agent from scratch, sends it a real task, and shows you what happens under the hood.
+This walkthrough creates a coding assistant from scratch and shows you exactly what happens when you send it a task.
 
-## 1. Start the server
+## 1. Start the app
 
 ```bash
 npm run dev
 ```
 
-You'll see two processes start:
-- Vite dev server on **http://localhost:5173**
-- Express + Socket.IO on **http://localhost:3001**
+Open [http://localhost:5173](http://localhost:5173). You'll see an empty grid — your office.
 
-Open [http://localhost:5173](http://localhost:5173). You'll see an empty 5×3 office grid.
+## 2. Create the assistant
 
-## 2. Create the agent
+Click **+ New Agent** in the top-right corner. Fill in:
 
-Click **+ New Agent** in the top-right HUD. Fill in:
-
-| Field | Value |
-|-------|-------|
+| Field | What to enter |
+|-------|--------------|
 | Name | `assistant` |
-| Mission | `You are a helpful coding assistant. When asked a question, you answer clearly and concisely. When asked to build something, you write clean, working code and explain your choices.` |
-| Avatar color | Any color you like |
+| Mission | `You are a helpful coding assistant. When asked a question, answer clearly. When asked to build something, write clean working code and explain your choices.` |
+| Avatar color | Anything you like |
 
-Click **Create**. The agent appears in room 0 (top-left) of the grid with status `idle`.
+Click **Create**. The assistant appears in the top-left room.
 
-Under the hood, the server:
-1. Assigned the agent to the first available room
-2. Created `workspaces/default/assistant/` with SOUL.md, USER.md, OPS.md, MEMORY.md, TOOLS.md
-3. Persisted the agent to `workspaces/default/agents.json`
-4. Emitted `agent:created` via Socket.IO — your browser grid updated in real time
+What just happened behind the scenes:
+- The server created a folder at `workspaces/default/assistant/`
+- It wrote identity files (who the assistant is, how it should work)
+- The assistant was saved to disk and is now ready to receive tasks
 
-## 3. Chat with the agent
+## 3. Send it a task
 
-Click on the agent's room to open the **ChatModal**. Type this message:
+Click on the assistant's room to open the chat. Type:
 
 ```
 Write a Python function that checks if a string is a valid email address.
 Include a docstring and 3 test cases.
 ```
 
-Press **Enter** or click **Send**.
+Press **Enter**. Watch what happens:
 
-The agent starts immediately. Watch the UI:
+- The status badge switches to **Running**
+- Text starts streaming in — word by word, in real time
+- When the assistant uses a tool (like writing a file), a badge appears showing what it did
 
-1. **Status badge** changes from `idle` → `running`
-2. **Stream output** begins — text chunks arrive via `agent:stream` events and render in real time
-3. If the agent uses tools (e.g., writes a test file to disk), **tool call badges** appear:
-   ```
-   ▶ Write  client/test_email.py
-   ✓ Write  done
-   ```
-4. When done, status returns to `idle`
-
-**Expected response** (will vary):
+The response will look something like:
 
 ```python
 import re
@@ -73,7 +61,7 @@ def is_valid_email(email: str) -> bool:
         email: The string to validate.
 
     Returns:
-        True if the string matches a basic email pattern, False otherwise.
+        True if valid, False otherwise.
     """
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return bool(re.match(pattern, email))
@@ -85,72 +73,48 @@ assert is_valid_email("invalid-email") == False
 assert is_valid_email("user@.com") == False
 ```
 
+When it finishes, the status returns to **Idle**.
+
 ## 4. Ask a follow-up
 
-The session is persistent — the agent remembers the conversation. Send a follow-up:
+The assistant remembers your conversation. Send:
 
 ```
-Now add support for checking that the domain has at least one dot.
+Now add support for international domain names (e.g. münchen.de).
 ```
 
-The agent picks up the context from the previous turn and refines its answer without you repeating yourself.
+It picks up the context from the previous message and refines its answer — no need to explain what you were working on.
 
-## 5. Inspect the workspace
+## 5. Give it more capabilities
 
-After the first conversation, the agent's workspace is on disk at:
+By default, a new assistant can read and write text but can't execute shell commands. To let it run code:
 
-```
-workspaces/default/assistant/
-├── SOUL.md          ← "You are a helpful coding assistant..."
-├── USER.md          ← operator context
-├── OPS.md           ← how to do work
-├── MEMORY.md        ← empty index (no memories yet)
-├── TOOLS.md         ← available tools
-├── memory/          ← append-only logs (empty until agent writes here)
-└── .claude/
-    └── settings.json  ← { "permissions": { "allow": [...] } }
-```
-
-You can edit `SOUL.md` directly to change the agent's personality, then send another message — the new identity takes effect immediately on the next run.
-
-## 6. Permissions
-
-By default, a new agent gets a conservative set of tools. To let it execute shell commands:
-
-1. Open **AgentSidebar** (click the agent name, not the room)
+1. Click the assistant's name (not the room) to open the **Agent Sidebar**
 2. Go to the **Permissions** tab
 3. Add `Bash` to the allow list
-
-Or via the API:
-
-```bash
-curl -X POST http://localhost:3001/api/agents/<agentId>/permissions \
-  -H "Content-Type: application/json" \
-  -d '{ "permission": "Bash" }'
-```
 
 Now send:
 
 ```
-Run the Python test cases you wrote and show me the output.
+Run the test cases you wrote and show me the output.
 ```
 
-The agent will use `Bash` to run `python3` and show you the results.
+The assistant will execute the code and show you the actual result — not just what it predicts the result will be.
 
-## 7. Restart the server
+## 6. Restart the server and come back
 
-Stop the server with `Ctrl+C`. Restart:
+Stop the server with `Ctrl+C`. Start it again:
 
 ```bash
 npm run dev
 ```
 
-Open the browser again. The agent is still there — its status is `idle`, conversation history is intact. The SDK session ID is stored in `agents.json`, so the agent can resume right where it left off.
+Open the browser. Your assistant is still there — same room, same conversation history, same state. The session is saved to disk and resumes automatically.
 
-Send another message:
+Send:
 
 ```
 What did we build in our last conversation?
 ```
 
-The agent remembers everything.
+It remembers.

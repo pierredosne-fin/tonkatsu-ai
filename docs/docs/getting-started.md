@@ -6,13 +6,15 @@ sidebar_position: 2
 
 # Getting Started
 
-## Prerequisites
+This guide walks you through installing Tonkatsu, creating your first AI assistant, and understanding how your data is stored.
 
-- Node.js ≥ 18
-- An [Anthropic API key](https://console.anthropic.com/)
-- Git (required for repo-backed agents)
+## What you need before starting
 
-## Installation
+- **Node.js 18 or later** — the runtime that powers the server ([download here](https://nodejs.org))
+- **An Anthropic API key** — this is what lets assistants think. Get one at [console.anthropic.com](https://console.anthropic.com/)
+- **Git** — only needed if you want assistants that work inside a code repository
+
+## Step 1 — Download and install
 
 ```bash
 git clone https://github.com/pierredosne/my-team.git
@@ -20,123 +22,91 @@ cd my-team
 npm install
 ```
 
-`npm install` runs at the workspace root and installs dependencies for both the `client` and `server` packages in one pass.
+`npm install` downloads all required software packages for both the app and the server automatically.
 
-## Configuration
+## Step 2 — Add your API key
 
-Create `server/.env`:
+Create a file called `server/.env` and paste in your Anthropic API key:
 
 ```env
 ANTHROPIC_API_KEY=sk-ant-...
 PORT=3001  # optional, defaults to 3001
 ```
 
-The API key is read only on the server side and never sent to the browser.
+This file is never shared or committed to version control. The API key stays on your machine.
 
-## Running in development
+## Step 3 — Start the app
 
 ```bash
 npm run dev
 ```
 
-This starts two processes concurrently via `concurrently`:
+This starts two things at once:
 
-| Process | Command | URL | Description |
-|---------|---------|-----|-------------|
-| Vite dev server | `npm run dev -w client` | http://localhost:5173 | React frontend with HMR |
-| Express server | `npm run dev -w server` | http://localhost:3001 | API + Socket.IO, hot-reloads via `tsx watch` |
+| What | Address | Description |
+|------|---------|-------------|
+| The office UI | http://localhost:5173 | The browser interface you'll use every day |
+| The server | http://localhost:3001 | Handles AI, data, and real-time updates |
 
-The Vite dev server proxies `/api` and `/socket.io` requests to `http://localhost:3001`, so you only need to open one URL in your browser.
+Open [http://localhost:5173](http://localhost:5173) in your browser. You'll see an empty grid — your office, ready for assistants.
 
-To run each process independently:
+## Step 4 — Create your first assistant
 
-```bash
-npm run dev -w server   # Express only
-npm run dev -w client   # Vite only
-```
+1. Click **+ New Agent** in the top-right corner
+2. Fill in:
+   - **Name** — a short identifier, e.g. `assistant`
+   - **Mission** — describe what this assistant does, in plain language. For example: *"You are a helpful assistant. Answer questions clearly and concisely."*
+   - **Avatar color** — pick any color you like
+3. Click **Create**
 
-## Create your first agent
+The assistant appears in a room on the grid.
 
-1. Open [http://localhost:5173](http://localhost:5173) — you'll see an empty 5×3 office grid.
-2. Click **+ New Agent** in the top-right HUD.
-3. Fill in the form:
-   - **Name** — a short slug, e.g. `assistant`
-   - **Mission** — one paragraph describing what the agent does, e.g. `You are a helpful general-purpose assistant. Answer questions clearly and concisely.`
-   - **Avatar color** — pick any color
-4. Click **Create**. The agent appears in an empty room on the grid.
-5. Click the room to open the **ChatModal**.
-6. Type a message and press **Enter** (or click Send).
+## Step 5 — Chat with it
 
-The agent starts immediately. You'll see text streaming in real time, and any tool calls (file reads, bash commands, etc.) appear inline.
+Click on the assistant's room to open the chat. Type a message and press **Enter**.
 
-## Workspace layout on disk
-
-Each agent gets a dedicated directory under `workspaces/<teamId>/<agentSlug>/`. These files are written by the server on agent creation and injected into the system prompt on every run:
-
-```
-workspaces/
-  <teamId>/
-    agents.json              # persisted runtime state for all agents in this team
-    <agentSlug>/
-      SOUL.md                # agent identity: name, mission, personality
-      USER.md                # operator context: who this agent works for
-      OPS.md                 # operational playbook: how to run tasks, git workflow
-      MEMORY.md              # index of memory files (long-term knowledge)
-      TOOLS.md               # available MCP tools and skills
-      memory/                # append-only daily logs (YYYY-MM-DD.md) and project docs
-      .claude/
-        settings.json        # allowed tools and permissions
-      .mcp.json              # MCP server configuration
-repos/
-  <repo-slug>/               # bare git clones for repo-backed agents
-```
-
-| File | Purpose |
-|------|---------|
-| `SOUL.md` | Defines the agent's name, mission, and personality. The agent reads this to know who it is. |
-| `USER.md` | Describes the human operator: their role, preferences, communication style. |
-| `OPS.md` | Operational guidelines: coding standards, git workflow, escalation rules. |
-| `MEMORY.md` | Index pointing to files in `memory/`. Agents append learnings here during work. |
-| `TOOLS.md` | Documents available MCP integrations and skills with usage notes. |
-
-You can edit any of these files directly on disk or via the **AgentSidebar** in the UI.
+The assistant starts working immediately. You'll see its response streaming in word by word. If it uses any tools (like reading a file or running a command), those appear inline too.
 
 ## Read-only mode
 
-Read-only mode lets you expose the Tonkatsu UI — so anyone can view agents, read conversation history, and watch streams — without granting write access. Agents cannot be created, modified, or deleted, and write-capable socket events (`agent:sleep`, `agent:newConversation`, `agent:moveRoom`) are silently ignored.
-
-Enable it by setting an environment variable:
+Want to let someone observe the office without being able to change anything? Enable read-only mode:
 
 ```env
 # server/.env
-READ_ONLY=true   # or READ_ONLY=1
+READ_ONLY=true
 ```
 
-On startup the server logs:
+In read-only mode:
+- Anyone can view assistants and watch them work
+- No one can create, delete, or modify assistants
+- No one can move assistants or start new conversations
+
+This is useful for **demos**, **shared screens**, or **team visibility dashboards**.
+
+## Where your data lives
+
+Every assistant has a private folder on disk. Nothing is stored in a database — it's all plain files you can open and read.
+
 ```
-[startup] READ_ONLY mode enabled — write operations are disabled
+workspaces/
+  my-team/
+    agents.json          ← list of all assistants and their current state
+    assistant/           ← one folder per assistant
+      SOUL.md            ← who the assistant is (name, mission, personality)
+      USER.md            ← context about you (your role, preferences)
+      OPS.md             ← how it should approach work
+      MEMORY.md          ← index of things it has learned over time
+      TOOLS.md           ← what tools and integrations it has access to
+      memory/            ← its long-term notes and logs
+      .claude/
+        settings.json    ← which tools it's allowed to use
 ```
 
-The client fetches `GET /api/config` on load and receives `{ "readOnly": true }`, which disables write actions in the UI automatically.
+You can open and edit any of these files directly. Changes take effect on the next task.
 
-**What is still allowed in read-only mode:**
-- Viewing all agents, teams, and conversation history
-- Subscribing to real-time streams (Socket.IO)
-- Triggering an agent via `POST /api/agents/:id/trigger` (the one write exception)
+## Next steps
 
-**When to use it:**
-- **Demos** — let stakeholders view agents working without risk of accidental changes
-- **Shared/untrusted environments** — expose the UI on a shared network without granting write access
-- **Horizontal scaling** — run multiple read-only instances behind a load balancer with one writer instance (see [Deployment → Scaling](./deployment#scaling))
-
-## Building for production
-
-```bash
-npm run build
-```
-
-Outputs:
-- `client/dist/` — static frontend assets (serve with any static file server or Express)
-- `server/dist/` — compiled server JavaScript (run with `node dist/index.js`)
-
-See [Deployment](./deployment) for production configuration details.
+- [Your first agent →](./examples/first-agent) — a step-by-step walkthrough with a real example
+- [Multi-agent teams →](./examples/multi-agent-team) — set up assistants that work together
+- [Scheduled tasks →](./examples/scheduled-tasks) — automate recurring jobs
+- [Deployment →](./deployment) — run Tonkatsu on a server for your whole team

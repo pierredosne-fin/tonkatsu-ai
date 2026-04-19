@@ -4,130 +4,115 @@ title: Overview
 sidebar_position: 1
 ---
 
-# Architecture Overview
+# How Tonkatsu Works
 
-Tonkatsu is a monorepo with two npm workspaces and a shared disk layout for agent state:
+This page explains the big picture — how the pieces fit together, what happens when you send a message, and why things are built the way they are. No technical background required for the first half.
+
+## The big picture
+
+Tonkatsu has three main parts:
+
+```
+Your browser  ←→  The server  ←→  Anthropic AI
+```
+
+- **Your browser** shows the office grid, chat windows, and live streaming output
+- **The server** runs on your machine, manages assistants, and talks to the AI
+- **Anthropic AI** is the intelligence behind every assistant — it thinks, writes, and decides what to do next
+
+When you type a message to an assistant, it flows right to left and back:
+
+1. Your browser sends the message to the server
+2. The server sends it to the Anthropic AI
+3. The AI starts generating a response — word by word
+4. Each word streams back through the server to your browser in real time
+5. When a tool is used (reading a file, running a command), that also appears live
+6. When done, the assistant goes back to idle
+
+## What happens during delegation
+
+Assistants can hand tasks to other assistants. Here's what that looks like from the inside:
+
+1. An assistant finishes writing its response — and it includes a delegation tag
+2. The server spots the tag and pauses that assistant
+3. The server sends the subtask to the target assistant
+4. The target assistant works, streams its output, finishes
+5. The result is fed back to the first assistant, which continues
+6. The whole chain can be up to 5 levels deep
+
+You see all of this live in the browser — delegation badges, streaming output from each assistant in sequence.
+
+## How assistants remember things
+
+Assistants keep their memory in plain files on disk:
+
+- At the end of each task, an assistant can write notes to its `memory/` folder
+- Next time it runs, it reads those notes and picks up where it left off
+- Session IDs are saved too — if the server restarts, assistants resume their last conversation automatically
+
+## The office grid
+
+Each team gets a 5×3 grid — 15 rooms. Each room can hold one assistant. The grid is purely visual: rooms don't affect how assistants work, but they make it easy to orient yourself when you have many assistants running at once.
+
+## Why no database?
+
+All data is stored as plain JSON files and markdown on disk. This means:
+
+- No database to install, configure, or maintain
+- Easy to inspect, back up, or move — just copy the folder
+- The server restarts cleanly with no migration steps
+
+The trade-off is that you can't run multiple server instances pointing at the same data (unless you use a shared network drive — see [Deployment → Scaling](../deployment#scaling)).
+
+---
+
+## Technical detail (for developers)
+
+### Codebase layout
 
 ```
 tonkatsu/
 ├── client/       # React 19 + Vite frontend
 ├── server/       # Express + Socket.IO backend (ESM TypeScript)
-├── docs/         # This Docusaurus site
-├── workspaces/   # Agent workspaces on disk (not in git)
+├── docs/         # This documentation site
+├── workspaces/   # Agent data on disk (not in git)
 └── repos/        # Bare git clones for repo-backed agents (not in git)
 ```
 
-## System diagram
+### Request flow
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Browser (React 19 + Zustand)                                │
-│  ┌──────────┐  ┌────────────┐  ┌────────┐  ┌────────────┐  │
-│  │OfficeMap │  │ ChatModal  │  │  HUD   │  │AgentSidebar│  │
-│  └────┬─────┘  └─────┬──────┘  └───┬────┘  └─────┬──────┘  │
-│       └──────────────┴─────────────┴──────────────┘         │
-│                          │ Zustand                           │
-│               ┌──────────┴──────────┐                       │
-│               │ agentStore          │ socketStore            │
-│               └─────────────────────┘                       │
-└──────────────────────────┬──────────────────────────────────┘
-                           │ Socket.IO (ws://)
-                           │ HTTP REST (/api/*)
-┌──────────────────────────┴──────────────────────────────────┐
-│  Express + Socket.IO Server (Node.js, ESM TypeScript)        │
-│                                                              │
-│  ┌─────────────┐  ┌──────────────┐  ┌──────────────────┐   │
-│  │ agentService│  │claudeService │  │persistenceService│   │
-│  │ (in-memory  │  │(SDK query()) │  │ (JSON file I/O)  │   │
-│  │  Map<id,    │◄─┤              │  │                  │   │
-│  │  Agent>)    │  │ buildSystem  │  │ agents.json      │   │
-│  └──────┬──────┘  │ PromptAppend │  │ templates.json   │   │
-│         │         └──────┬───────┘  │ schedules.json   │   │
-│  ┌──────┴──────┐         │          │ skills.json      │   │
-│  │ roomService │         │          └──────────────────┘   │
-│  │ (5×3 grid)  │         │                                  │
-│  └─────────────┘         │                                  │
-└─────────────────────────┬┘──────────────────────────────────┘
-                          │ HTTPS
-              ┌───────────┴───────────┐
-              │  Anthropic API        │
-              │  claude-sonnet-4-6    │
-              │  @anthropic-ai/       │
-              │  claude-agent-sdk     │
-              └───────────────────────┘
+Browser
+  │  Socket.IO (WebSocket)
+  ▼
+Express + Socket.IO server
+  │
+  ├── agentService (in-memory Map<id, Agent>)
+  │
+  └── claudeService
+        │  @anthropic-ai/claude-agent-sdk query()
+        │  permissionMode: 'acceptEdits'
+        │  settingSources: ['project']
+        │  model: claude-sonnet-4-6, max 200 turns
+        ▼
+      Anthropic API
+        │  streams tokens
+        ▼
+      agent:stream events → browser
 ```
 
-## Request flow
-
-A typical user-initiated message goes through these steps:
-
-1. User types a message in **ChatModal** → `socketStore.sendMessage()` emits `agent:sendMessage`
-2. Server receives the event → `agentService` looks up the agent → calls `claudeService.runTask()`
-3. `claudeService` calls `query()` from `@anthropic-ai/claude-agent-sdk` with the built system prompt
-4. The SDK streams tokens back → server emits `agent:stream` events → browser appends to `streamBuffers`
-5. Tool calls: `agent:toolCall` event fires when the agent invokes a tool; `agent:toolResult` when it returns
-6. Delegation: if the agent output contains `<CALL_AGENT name="X">…</CALL_AGENT>`, the server recursively calls agent X and injects the result
-7. On completion: agent status → `idle`, final content appended to conversation history, `agents.json` updated
-
-## Agent lifecycle
+### Agent lifecycle
 
 ```
-create agent
-     │
-     ▼
-fileService.setupWorkspaceStructure()
-     │  writes SOUL.md, USER.md, OPS.md, MEMORY.md, TOOLS.md
-     ▼
-agentService.addAgent()
-     │  inserts into in-memory Map
-     │  persist() → agents.json
-     ▼
-[server restarts?]
-     │
-     ▼
-agentService.loadAllAgents()
-     │  reads agents.json
-     ▼
-agentService.restoreAgent()
-     │  rebuilds Map entry
-     │  resumes last SDK session (if sessionId stored)
-     ▼
-user sends message
-     │
-     ▼
-claudeService.runTask()
-     │  status → running
-     │  calls query() with permissionMode: 'acceptEdits'
-     │  max 200 turns per task
-     │
-     ├── streams → agent:stream events
-     ├── tool calls → agent:toolCall / agent:toolResult
-     ├── <CALL_AGENT> → recursive delegation (max depth 5)
-     └── <NEED_INPUT> → status: pending (waits for user reply)
-     │
-     ▼
-status → idle, session ID persisted
+create → setupWorkspace → assign room → persist → [restart?] → restore → runTask → persist sessionId
 ```
 
-## The 5×3 room grid
+### Key design decisions
 
-Each team gets a 5×3 grid of 15 rooms. Rooms are identified by index (0–14) and managed by `roomService.ts`. When an agent is created, it's assigned the first available room. Agents can be moved via the `agent:moveRoom` socket event or the REST API.
-
-The grid is purely visual — rooms don't affect how agents execute tasks. They're a UX device for orienting users in teams with many agents.
-
-## Session persistence across restarts
-
-When `claudeService` completes a task, it stores the SDK session ID in the agent's record in `agents.json`. On the next `runTask()` call, if a session ID is present, it's passed to `query()` as `resumeSession`. This lets the agent pick up where it left off — maintaining context across server restarts without re-uploading conversation history.
-
-If you explicitly call `agent:newConversation`, the session ID is cleared and a fresh conversation starts.
-
-## Key design decisions
-
-| Decision | Rationale |
-|----------|-----------|
-| **No database** | All state lives in JSON files. Simple, portable, no migrations, easy to inspect and edit. Suitable for self-hosted team use. |
-| **In-memory agent map** | Fast O(1) lookups. Rebuilt from disk on startup — disk is the source of truth, memory is the cache. |
-| **Socket.IO for real-time** | Streaming, status changes, tool events, and delegations all use a single WebSocket connection. |
-| **ESM TypeScript** | Both client and server use native ES modules. Avoids CommonJS interop headaches. |
-| **`acceptEdits` permission mode** | Agents can take real actions (edit files, run commands) without prompting for each tool call. The operator controls which tools are allowed via `settings.json`. |
-| **`settingSources: ['project']`** | Agent tool permissions are read from the workspace `.claude/settings.json`, giving fine-grained per-agent control. |
+| Decision | Why |
+|----------|-----|
+| No database | Simple, portable, no migrations, easy to inspect |
+| In-memory agent map | O(1) lookups; disk is source of truth, memory is cache |
+| Socket.IO for everything real-time | One connection handles streaming, status, tools, delegations |
+| ESM TypeScript | Native modules on both client and server |
+| `acceptEdits` mode | Agents act without per-tool-call approval; permissions controlled via `settings.json` |
