@@ -184,10 +184,12 @@ Write tailored, concise instructions that will make this agent highly effective 
       mission: agent.mission,
       avatarColor: agent.avatarColor,
     });
-    fileService.snapshotWorkspace(
-      agent.repoUrl,
-      templateService.getAgentTemplateWorkspacePath(template.id),
-    );
+    if (agent.repoUrl) {
+      fileService.snapshotWorkspace(
+        agent.repoUrl,
+        templateService.getAgentTemplateWorkspacePath(template.id),
+      );
+    }
     res.status(201).json(template);
   });
 
