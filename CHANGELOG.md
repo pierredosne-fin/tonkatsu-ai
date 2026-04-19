@@ -1,3 +1,10 @@
+## [1.1.2](https://github.com/pierredosne-fin/data-platform-tonkatsu/compare/v1.1.1...v1.1.2) (2026-04-19)
+
+
+### Bug Fixes
+
+* set correct baseUrl and url for GitHub Pages deployment ([8f1dde4](https://github.com/pierredosne-fin/data-platform-tonkatsu/commit/8f1dde4c936984ba55e3adfe9ea52e19d6a4e896))
+
 ## [1.1.1](https://github.com/pierredosne-fin/data-platform-tonkatsu/compare/v1.1.0...v1.1.1) (2026-04-19)
 
 
