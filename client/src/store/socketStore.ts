@@ -69,7 +69,7 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
   connect: () => {
     if (get().socket) return;
 
-    const socket = io(import.meta.env.DEV ? 'http://localhost:3001' : '', { transports: ['websocket'] });
+    const socket = io('http://localhost:3001', { transports: ['websocket'] });
 
     socket.on('connect', () => set({ connected: true }));
     socket.on('disconnect', () => set({ connected: false }));

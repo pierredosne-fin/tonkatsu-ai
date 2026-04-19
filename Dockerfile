@@ -28,16 +28,21 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Only install server production deps
+# Install serve for static frontend + server production deps
 COPY package.json package-lock.json ./
 COPY server/package.json ./server/
-RUN npm ci --workspace=server --omit=dev && npm cache clean --force
+RUN npm ci --workspace=server --omit=dev && \
+    npm install -g serve && \
+    npm cache clean --force
 
 # Copy compiled server and built client static files
 COPY --from=builder /app/server/dist ./server/dist
 COPY --from=builder /app/client/dist ./client/dist
 
-EXPOSE 5173
-ENV PORT=5173
+# 5173 = React frontend (serve), 3001 = Express API + Socket.IO
+EXPOSE 5173 3001
 
-CMD ["node", "server/dist/index.js"]
+COPY docker-entrypoint.sh ./
+RUN chmod +x docker-entrypoint.sh
+
+CMD ["./docker-entrypoint.sh"]

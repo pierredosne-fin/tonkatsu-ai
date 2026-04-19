@@ -2,8 +2,6 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
 import { PORT, READ_ONLY } from './config.js';
 import { createAgentRouter, createRoomsRouter, createTeamsRouter } from './routes/agents.js';
 import { createWorkspacesRouter } from './routes/workspaces.js';
@@ -29,14 +27,14 @@ process.on('uncaughtException', (err) => {
 const app = express();
 const httpServer = createServer(app);
 
-const DEV_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:5173'];
-const isProd = process.env.NODE_ENV === 'production';
-
 const io = new Server(httpServer, {
-  cors: isProd ? { origin: '*' } : { origin: DEV_ORIGINS, methods: ['GET', 'POST'] },
+  cors: {
+    origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    methods: ['GET', 'POST'],
+  },
 });
 
-app.use(cors(isProd ? {} : { origin: DEV_ORIGINS }));
+app.use(cors({ origin: ['http://localhost:5173', 'http://127.0.0.1:5173'] }));
 app.use(express.json());
 
 app.get('/api/config', (_req, res) => {
@@ -62,15 +60,6 @@ app.use('/api/schedules', createSchedulesRouter(io));
 app.use('/api/skills', createSkillsRouter());
 app.use('/api/ssh-keys', createSshKeysRouter());
 app.use('/api/workspace-sync', createWorkspaceSyncRouter(io));
-
-// ── Serve React client (production) ─────────────────────────────────────────
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const clientDist = join(__dirname, '../../client/dist');
-app.use(express.static(clientDist));
-app.get('*', (_req, res) => {
-  res.sendFile(join(clientDist, 'index.html'));
-});
 
 // ── Load data before accepting connections ───────────────────────────────────
 
