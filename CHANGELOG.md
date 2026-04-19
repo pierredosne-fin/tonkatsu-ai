@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/pierredosne-fin/data-platform-tonkatsu/compare/v1.0.0...v1.0.1) (2026-04-19)
+
+
+### Bug Fixes
+
+* add docker/setup-buildx-action to enable GHA cache in release CI ([0b4ed50](https://github.com/pierredosne-fin/data-platform-tonkatsu/commit/0b4ed504183fae4d87db20579c6ae9ee48bf2232))
+
 # 1.0.0 (2026-04-19)
 
 
