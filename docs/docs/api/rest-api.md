@@ -8,148 +8,465 @@ sidebar_position: 1
 
 Base URL: `http://localhost:3001`
 
-All request bodies use `Content-Type: application/json`. Zod validates all inputs server-side.
+All request bodies use `Content-Type: application/json`. All inputs are validated server-side with [Zod](https://zod.dev). Invalid requests return HTTP 400 with a structured error body.
 
 ---
 
 ## Agent Templates
 
-Base path: `/api/templates/agents`
+Manage reusable agent blueprints. Base path: `/api/templates/agents`
 
 ### `GET /api/templates/agents`
+
 List all agent templates.
 
+```bash
+curl http://localhost:3001/api/templates/agents
+```
+
+**Response** `200 OK`:
+```json
+[
+  {
+    "id": "tmpl_abc123",
+    "name": "data-analyst",
+    "mission": "You are a data analyst...",
+    "avatarColor": "#4f46e5",
+    "repoUrl": null,
+    "createdAt": "2024-01-15T10:00:00Z"
+  }
+]
+```
+
+---
+
 ### `POST /api/templates/agents`
+
 Create a new agent template.
 
+```bash
+curl -X POST http://localhost:3001/api/templates/agents \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "data-analyst",
+    "mission": "You are a data analyst. When given a question, you investigate it thoroughly and return a structured report.",
+    "avatarColor": "#4f46e5"
+  }'
+```
+
+**Request body:**
+```ts
+{
+  name: string;          // required, 1–64 chars, used as the agent slug
+  mission: string;       // required, injected into SOUL.md
+  avatarColor?: string;  // hex color, e.g. "#4f46e5"
+  repoUrl?: string;      // git remote URL for repo-backed agents
+}
+```
+
+**Response** `201 Created`: the created template object.
+
+---
+
 ### `PATCH /api/templates/agents/:id`
-Update template metadata (name, mission, avatarColor, repoUrl, …).
+
+Update template metadata.
+
+```bash
+curl -X PATCH http://localhost:3001/api/templates/agents/tmpl_abc123 \
+  -H "Content-Type: application/json" \
+  -d '{ "avatarColor": "#10b981" }'
+```
+
+**Request body:** any subset of the create fields (`name`, `mission`, `avatarColor`, `repoUrl`).
+
+---
 
 ### `DELETE /api/templates/agents/:id`
-Delete a template.
+
+Delete a template. Does not affect live agents instantiated from it.
+
+```bash
+curl -X DELETE http://localhost:3001/api/templates/agents/tmpl_abc123
+```
+
+**Response** `204 No Content`.
+
+---
 
 ### `GET /api/templates/agents/:id/files`
-Read workspace files: `CLAUDE.md`, settings, commands, rules, skills.
+
+Read the template's workspace files: `CLAUDE.md`, `.claude/settings.json`, commands, rules, and skills.
+
+```bash
+curl http://localhost:3001/api/templates/agents/tmpl_abc123/files
+```
+
+**Response** `200 OK`:
+```json
+{
+  "claudeMd": "# CLAUDE.md\n...",
+  "settings": "{\"permissions\":{\"allow\":[\"Bash\"]}}",
+  "commands": { "commit": "# /commit skill..." },
+  "rules": { "no-force-push": "Never force-push..." },
+  "skills": { "analyze": "# analyze skill..." }
+}
+```
+
+---
 
 ### `PUT /api/templates/agents/:id/files/claude-md`
-Write `CLAUDE.md`.
 
-```json
-{ "content": "# My Agent\n..." }
+Write the template's `CLAUDE.md`.
+
+```bash
+curl -X PUT http://localhost:3001/api/templates/agents/tmpl_abc123/files/claude-md \
+  -H "Content-Type: application/json" \
+  -d '{ "content": "# My Agent\n\nThis agent does X." }'
 ```
+
+**Request body:**
+```ts
+{ content: string }
+```
+
+---
 
 ### `PUT /api/templates/agents/:id/files/settings`
-Write `.claude/settings.json`.
 
-```json
-{ "content": "{\"permissions\":{\"allow\":[\"Bash\"]}}" }
+Write the template's `.claude/settings.json`. The `content` field must be a valid JSON string.
+
+```bash
+curl -X PUT http://localhost:3001/api/templates/agents/tmpl_abc123/files/settings \
+  -H "Content-Type: application/json" \
+  -d '{ "content": "{\"permissions\":{\"allow\":[\"Bash\",\"Read\",\"Write\"]}}" }'
 ```
 
+---
+
 ### `GET /api/templates/agents/:id/override-settings`
-Read override settings (merged on top of workspace settings at instantiation).
+
+Read override settings — a JSON object merged on top of the workspace settings when the template is instantiated.
+
+```bash
+curl http://localhost:3001/api/templates/agents/tmpl_abc123/override-settings
+```
+
+**Response** `200 OK`:
+```json
+{
+  "permissions": {
+    "allow": ["Bash", "Read", "Write", "Edit"]
+  }
+}
+```
+
+---
 
 ### `PUT /api/templates/agents/:id/override-settings`
-Set override settings. Body is the raw JSON object.
+
+Set override settings. The request body is the raw JSON object (not a string).
+
+```bash
+curl -X PUT http://localhost:3001/api/templates/agents/tmpl_abc123/override-settings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "permissions": {
+      "allow": ["Read", "Glob", "Grep"]
+    }
+  }'
+```
+
+---
 
 ### `PUT /api/templates/agents/:id/files/commands/:name`
+
+Create or update a named command file (slash command). `:name` is the command name without the leading `/`.
+
+```bash
+curl -X PUT http://localhost:3001/api/templates/agents/tmpl_abc123/files/commands/commit \
+  -H "Content-Type: application/json" \
+  -d '{ "content": "# /commit\nStage all changes and commit with a structured message." }'
+```
+
 ### `DELETE /api/templates/agents/:id/files/commands/:name`
-Manage command files.
+
+Delete a command file.
+
+---
 
 ### `PUT /api/templates/agents/:id/files/rules/:name`
 ### `DELETE /api/templates/agents/:id/files/rules/:name`
-Manage rule files.
+
+Manage rule files (behavioral constraints injected into the prompt).
+
+---
 
 ### `PUT /api/templates/agents/:id/files/skills/:name`
 ### `DELETE /api/templates/agents/:id/files/skills/:name`
-Manage skill files.
+
+Manage skill files (reusable task templates).
+
+---
 
 ### `POST /api/templates/agents/:id/generate-claude-md`
-AI-generate a `CLAUDE.md` for the template.
 
-```json
-{ "current": "optional existing content" }
+AI-generate a `CLAUDE.md` for this template based on its mission and optional existing content.
+
+```bash
+curl -X POST http://localhost:3001/api/templates/agents/tmpl_abc123/generate-claude-md \
+  -H "Content-Type: application/json" \
+  -d '{ "current": "# Existing content to improve..." }'
 ```
 
+**Request body:**
+```ts
+{ current?: string }   // optional existing CLAUDE.md content
+```
+
+**Response** `200 OK`:
+```json
+{ "content": "# CLAUDE.md\n\nGenerated content..." }
+```
+
+---
+
 ### `POST /api/templates/agents/from-agent/:agentId`
-Snapshot a live agent as a new template.
+
+Snapshot a live agent as a new template, copying its current workspace files and settings.
+
+```bash
+curl -X POST http://localhost:3001/api/templates/agents/from-agent/agent_xyz789
+```
+
+**Response** `201 Created`: the new template object.
 
 ---
 
 ## Team Templates
 
-Base path: `/api/templates/teams`
+Manage named groups of agent templates. Base path: `/api/templates/teams`
 
 ### `GET /api/templates/teams`
+
 List all team templates.
 
 ### `POST /api/templates/teams`
-Create a team template.
 
-```json
-{ "name": "Data Squad", "agentTemplateIds": ["id1", "id2"] }
+Create a team template from existing agent templates.
+
+```bash
+curl -X POST http://localhost:3001/api/templates/teams \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Data Squad",
+    "agentTemplateIds": ["tmpl_abc123", "tmpl_def456"]
+  }'
 ```
 
+**Request body:**
+```ts
+{
+  name: string;
+  agentTemplateIds: string[];   // existing agent template IDs
+}
+```
+
+---
+
 ### `PATCH /api/templates/teams/:id`
-Update team template metadata.
+
+Update team template metadata (`name`, `agentTemplateIds`).
 
 ### `DELETE /api/templates/teams/:id`
-Delete a team template.
+
+Delete the team template.
+
+---
 
 ### `POST /api/templates/teams/:id/instantiate`
-Spawn a team from the template.
 
+Spawn a full team from the template. Creates one live agent per agent template in the team.
+
+```bash
+curl -X POST http://localhost:3001/api/templates/teams/team_tmpl_abc/instantiate \
+  -H "Content-Type: application/json" \
+  -d '{ "teamId": "my-data-squad" }'
+```
+
+**Request body:**
+```ts
+{ teamId?: string }   // optional; auto-generated if omitted
+```
+
+**Response** `201 Created`:
 ```json
-{ "teamId": "optional-custom-id" }
+{
+  "teamId": "my-data-squad",
+  "agents": [
+    { "id": "agent_111", "name": "analyst", ... },
+    { "id": "agent_222", "name": "reporter", ... }
+  ]
+}
 ```
 
 ---
 
 ## Live Agents
 
-Base path: `/api/agents`
+Manage running agent instances. Base path: `/api/agents`
 
 ### `GET /api/agents`
-List all live agents.
+
+List all live agents across all teams.
+
+```bash
+curl http://localhost:3001/api/agents
+```
+
+**Response** `200 OK`:
+```json
+[
+  {
+    "id": "agent_xyz789",
+    "name": "assistant",
+    "mission": "You are a helpful assistant.",
+    "teamId": "default",
+    "room": 0,
+    "status": "idle",
+    "avatarColor": "#4f46e5",
+    "sessionId": "sess_abc...",
+    "repoUrl": null,
+    "createdAt": "2024-01-15T10:00:00Z"
+  }
+]
+```
+
+---
 
 ### `POST /api/agents`
+
 Create a live agent.
 
+```bash
+curl -X POST http://localhost:3001/api/agents \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "assistant",
+    "mission": "You are a helpful general-purpose assistant.",
+    "teamId": "default",
+    "avatarColor": "#4f46e5"
+  }'
+```
+
+**Request body:**
+```ts
+{
+  name: string;
+  mission: string;
+  teamId: string;
+  avatarColor?: string;
+  repoUrl?: string;
+}
+```
+
+**Response** `201 Created`: the created agent object. Also emits `agent:created` via Socket.IO.
+
+---
+
 ### `PATCH /api/agents/:id`
+
 Update agent metadata.
 
+```bash
+curl -X PATCH http://localhost:3001/api/agents/agent_xyz789 \
+  -H "Content-Type: application/json" \
+  -d '{ "mission": "Updated mission text." }'
+```
+
+---
+
 ### `DELETE /api/agents/:id`
-Delete an agent and its workspace.
+
+Delete an agent and its workspace directory.
+
+```bash
+curl -X DELETE http://localhost:3001/api/agents/agent_xyz789
+```
+
+**Response** `204 No Content`. Also emits `agent:deleted` via Socket.IO.
+
+---
 
 ### `GET /api/agents/:id/permissions`
-Read the agent's tool allow list.
 
-```json
-{ "allow": ["Bash", "Read", "Write"] }
+Read the agent's current tool allow list.
+
+```bash
+curl http://localhost:3001/api/agents/agent_xyz789/permissions
 ```
+
+**Response** `200 OK`:
+```json
+{ "allow": ["Bash", "Read", "Write", "Edit", "Glob", "Grep"] }
+```
+
+---
 
 ### `PUT /api/agents/:id/permissions`
-Replace the allow list.
 
-```json
-{ "allow": ["Bash", "Read"] }
+Replace the entire allow list.
+
+```bash
+curl -X PUT http://localhost:3001/api/agents/agent_xyz789/permissions \
+  -H "Content-Type: application/json" \
+  -d '{ "allow": ["Read", "Glob", "Grep"] }'
 ```
+
+---
 
 ### `POST /api/agents/:id/permissions`
-Add one permission.
 
-```json
-{ "permission": "Write" }
+Add one permission to the allow list.
+
+```bash
+curl -X POST http://localhost:3001/api/agents/agent_xyz789/permissions \
+  -H "Content-Type: application/json" \
+  -d '{ "permission": "WebSearch" }'
 ```
+
+---
 
 ### `DELETE /api/agents/:id/permissions`
-Remove one permission.
 
-```json
-{ "permission": "Write" }
+Remove one permission from the allow list.
+
+```bash
+curl -X DELETE http://localhost:3001/api/agents/agent_xyz789/permissions \
+  -H "Content-Type: application/json" \
+  -d '{ "permission": "Bash" }'
 ```
 
+---
+
 ### `PUT /api/agents/:id/files/settings`
-Write the agent's `.claude/settings.json`.
+
+Write the agent's `.claude/settings.json`. The `content` field must be a valid JSON string.
+
+```bash
+curl -X PUT http://localhost:3001/api/agents/agent_xyz789/files/settings \
+  -H "Content-Type: application/json" \
+  -d '{ "content": "{\"permissions\":{\"allow\":[\"Read\",\"Write\"]}}" }'
+```
+
+---
 
 ### `PUT /api/agents/:id/files/claude-md`
+
 Write the agent's `CLAUDE.md`.
+
+```bash
+curl -X PUT http://localhost:3001/api/agents/agent_xyz789/files/claude-md \
+  -H "Content-Type: application/json" \
+  -d '{ "content": "# CLAUDE.md\n\nAgent-specific instructions here." }'
+```
