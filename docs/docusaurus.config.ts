@@ -7,8 +7,8 @@ const config: Config = {
   tagline: 'A virtual office for Claude Code agents',
   favicon: 'img/tonkatsu.png',
 
-  url: 'https://my-team.dev',
-  baseUrl: '/',
+  url: 'https://pierredosne-fin.github.io',
+  baseUrl: '/data-platform-tonkatsu/',
 
   onBrokenLinks: 'throw',
   markdown: {
