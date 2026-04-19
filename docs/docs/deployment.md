@@ -6,9 +6,11 @@ sidebar_position: 8
 
 # Deployment
 
-Running Tonkatsu in production requires building both packages, configuring the server environment, and optionally setting up a reverse proxy and process manager.
+Tonkatsu can be deployed as a **Docker image** (recommended) or by running the compiled Node.js output directly with a process manager. Both approaches are covered below.
 
-## Build
+## Build (Node.js / non-Docker)
+
+Skip this section if you're using Docker — the `Dockerfile` handles the build internally.
 
 ```bash
 npm run build
@@ -225,30 +227,62 @@ caddy run --config Caddyfile
 
 ---
 
-## Persistent storage
+## Docker
 
-The `workspaces/` and `repos/` directories must persist across deployments. Do not store them in ephemeral locations (e.g., a Docker container's filesystem without a volume mount).
+The repository includes a production-ready multi-stage `Dockerfile`. The builder stage compiles the client (Vite) and server (tsc), then the runtime stage copies only the production artefacts into a slim `node:20-alpine` image.
 
-**If using Docker:**
+### Build
 
-```dockerfile
-FROM node:20-alpine
-WORKDIR /app
-COPY . .
-RUN npm install && npm run build
-
-VOLUME ["/app/workspaces", "/app/repos", "/app/.sync-data"]
-
-EXPOSE 3001
-CMD ["node", "server/dist/index.js"]
+```bash
+docker build -t tonkatsu .
 ```
+
+### Run
 
 ```bash
 docker run -d \
+  --name tonkatsu \
   -p 3001:3001 \
   -v $(pwd)/workspaces:/app/workspaces \
   -v $(pwd)/repos:/app/repos \
-  -v $(pwd)/.sync-data:/app/.sync-data \
+  --env-file server/.env \
+  tonkatsu
+```
+
+The server serves the API, Socket.IO, and the compiled client at `http://localhost:3001`.
+
+### docker-compose
+
+```yaml
+# docker-compose.yml
+services:
+  tonkatsu:
+    build: .
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./workspaces:/app/workspaces
+      - ./repos:/app/repos
+    env_file:
+      - server/.env
+    restart: unless-stopped
+```
+
+```bash
+docker compose up -d
+```
+
+### Persistent storage
+
+The `workspaces/` and `repos/` directories must persist across container restarts and image updates. Always bind-mount or use named volumes for these paths — never rely on the container's ephemeral filesystem.
+
+```bash
+# Named volumes (alternative to bind mounts)
+docker run -d \
+  --name tonkatsu \
+  -p 3001:3001 \
+  -v tonkatsu_workspaces:/app/workspaces \
+  -v tonkatsu_repos:/app/repos \
   --env-file server/.env \
   tonkatsu
 ```
@@ -256,6 +290,28 @@ docker run -d \
 ---
 
 ## Upgrading
+
+**Docker:**
+
+```bash
+git pull
+docker build -t tonkatsu .
+docker stop tonkatsu && docker rm tonkatsu
+docker run -d --name tonkatsu -p 3001:3001 \
+  -v $(pwd)/workspaces:/app/workspaces \
+  -v $(pwd)/repos:/app/repos \
+  --env-file server/.env \
+  tonkatsu
+```
+
+Or with docker-compose:
+
+```bash
+git pull
+docker compose build && docker compose up -d
+```
+
+**Node.js / PM2:**
 
 ```bash
 git pull

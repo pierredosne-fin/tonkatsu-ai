@@ -10,19 +10,31 @@ This guide walks you through installing Tonkatsu, creating your first AI assista
 
 ## What you need before starting
 
-- **Node.js 18 or later** — the runtime that powers the server ([download here](https://nodejs.org))
 - **An Anthropic API key** — this is what lets assistants think. Get one at [console.anthropic.com](https://console.anthropic.com/)
+- **Docker** *(recommended)* — zero-dependency install. Or use Node.js 18+ if you prefer running from source.
 - **Git** — only needed if you want assistants that work inside a code repository
 
-## Step 1 — Download and install
+## Step 1 — Install
+
+### Option A — Docker (recommended)
+
+No Node.js required on the host. The image bundles everything.
 
 ```bash
-git clone https://github.com/pierredosne/my-team.git
-cd my-team
-npm install
+git clone https://github.com/pierredosne-fin/data-platform-tonkatsu.git
+cd data-platform-tonkatsu
+
+# Build the image
+docker build -t tonkatsu .
 ```
 
-`npm install` downloads all required software packages for both the app and the server automatically.
+### Option B — Node.js
+
+```bash
+git clone https://github.com/pierredosne-fin/data-platform-tonkatsu.git
+cd data-platform-tonkatsu
+npm install
+```
 
 ## Step 2 — Add your API key
 
@@ -37,6 +49,22 @@ This file is never shared or committed to version control. The API key stays on 
 
 ## Step 3 — Start the app
 
+### Option A — Docker
+
+```bash
+docker run -d \
+  --name tonkatsu \
+  -p 3001:3001 \
+  -v $(pwd)/workspaces:/app/workspaces \
+  -v $(pwd)/repos:/app/repos \
+  --env-file server/.env \
+  tonkatsu
+```
+
+The UI is served by the same container at [http://localhost:3001](http://localhost:3001).
+
+### Option B — Node.js (dev mode)
+
 ```bash
 npm run dev
 ```
@@ -48,7 +76,7 @@ This starts two things at once:
 | The office UI | http://localhost:5173 | The browser interface you'll use every day |
 | The server | http://localhost:3001 | Handles AI, data, and real-time updates |
 
-Open [http://localhost:5173](http://localhost:5173) in your browser. You'll see an empty grid — your office, ready for assistants.
+Open [http://localhost:5173](http://localhost:5173) in your browser (or [http://localhost:3001](http://localhost:3001) if using Docker). You'll see an empty grid — your office, ready for assistants.
 
 ## Step 4 — Create your first assistant
 
