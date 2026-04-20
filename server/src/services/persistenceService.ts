@@ -246,21 +246,31 @@ export function getSshKeyPath(name: string): string {
 }
 
 /**
- * Install the global SSH key as ~/.ssh/id_rsa so that git and gh CLI
- * commands run by agents work without needing GIT_SSH_COMMAND.
+ * Install the global SSH key as ~/.ssh/id_rsa and configure gh CLI to use
+ * SSH as git protocol, so that both git and gh commands work without tokens.
  * No-op if the global key is not configured.
  */
 export function setupSshIdentity(): void {
   const keyPath = getSshKeyPath(GLOBAL_SSH_KEY_NAME);
   if (!existsSync(keyPath)) return;
   try {
+    // ~/.ssh/id_rsa
     const sshDir = join(homedir(), '.ssh');
     mkdirSync(sshDir, { recursive: true });
     try { chmodSync(sshDir, 0o700); } catch { /* ignore */ }
     const idRsa = join(sshDir, 'id_rsa');
     writeFileSync(idRsa, readFileSync(keyPath, 'utf-8'), 'utf-8');
     try { chmodSync(idRsa, 0o600); } catch { /* ignore */ }
-    console.log('[ssh] Global SSH key installed to ~/.ssh/id_rsa');
+
+    // ~/.config/gh/hosts.yml — tell gh to use SSH so no token is needed
+    const ghConfigDir = join(homedir(), '.config', 'gh');
+    mkdirSync(ghConfigDir, { recursive: true });
+    const hostsyml = join(ghConfigDir, 'hosts.yml');
+    if (!existsSync(hostsyml)) {
+      writeFileSync(hostsyml, 'github.com:\n    git_protocol: ssh\n    users: {}\n', 'utf-8');
+    }
+
+    console.log('[ssh] Global SSH key installed to ~/.ssh/id_rsa, gh configured for SSH');
   } catch (err) {
     console.warn('[ssh] Failed to install SSH identity:', err);
   }
