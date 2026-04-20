@@ -34,6 +34,16 @@ vi.mock('../services/gitService.js', () => ({
   syncFromRemote: vi.fn().mockReturnValue({ ok: true }),
 }));
 
+// Mock the Claude agent SDK to avoid requiring ANTHROPIC_API_KEY in CI.
+// agentService imports getSessionMessages / listSessions from the SDK;
+// those are only used in async helpers (getHistory, getActiveSessions)
+// which are never called during the synchronous create/update paths we test.
+vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
+  query: vi.fn().mockResolvedValue(undefined),
+  getSessionMessages: vi.fn().mockResolvedValue([]),
+  listSessions: vi.fn().mockResolvedValue([]),
+}));
+
 // Dynamic imports after mocks are registered
 const { createApp } = await import('../app.js');
 const agentModule = await import('../services/agentService.js');
