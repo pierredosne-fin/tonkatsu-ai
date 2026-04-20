@@ -20,6 +20,7 @@ Tonkatsu is an open-source platform where you build a team of AI agents, give ea
 - **Agent delegation** — agents hand off work to each other automatically, up to 5 levels deep. You talk to the coordinator; it handles the rest.
 - **Persistent memory** — agents remember what they've learned across sessions. Conversations survive server restarts.
 - **Repo-backed agents** — tie an agent to a git repository. It gets its own branch and worktree, reads and commits code, and keeps identity files private.
+- **SSH auto-setup** — upload a global SSH key once via the API; the server installs it as `~/.ssh/id_rsa` and pre-populates GitHub's `known_hosts` so `git` and `gh` commands work natively inside Docker.
 - **Cron scheduling** — run agents on a cron expression. Daily reports, monitoring alerts, data syncs — fully automated.
 - **Templates** — snapshot any live agent or team configuration and reinstantiate it with one API call.
 - **Self-hosted** — your Anthropic API key and data never leave your server.
@@ -54,8 +55,7 @@ npm run dev
 
 | Service | URL |
 |---------|-----|
-| App (client) | http://localhost:5173 |
-| API (server) | http://localhost:3001 |
+| App + API | http://localhost:5173 |
 | Docs (local) | http://localhost:3000 (`npm run docs:dev`) |
 
 ---
@@ -64,7 +64,19 @@ npm run dev
 
 ```bash
 docker build -t tonkatsu .
-docker run -e ANTHROPIC_API_KEY=sk-ant-... -p 3001:3001 tonkatsu
+docker run -e ANTHROPIC_API_KEY=sk-ant-... -p 5173:5173 tonkatsu
+```
+
+The Docker image bundles **gh** (GitHub CLI), **gcloud**, and **bq** (Google Cloud SDK) so agents can run git, GitHub, and BigQuery commands natively.
+
+Pass `GITHUB_TOKEN` to enable `gh` API operations (PRs, issues, etc.):
+
+```bash
+docker run \
+  -e ANTHROPIC_API_KEY=sk-ant-... \
+  -e GITHUB_TOKEN=ghp_... \
+  -p 5173:5173 \
+  tonkatsu
 ```
 
 Production images are published to GitHub Container Registry on every release:
@@ -82,7 +94,8 @@ docker pull ghcr.io/pierredosne-fin/data-platform-tonkatsu:latest
 | Backend | Express + Socket.IO, ESM TypeScript (`tsx watch`) |
 | Frontend | React 19 + Vite, Zustand |
 | AI | `@anthropic-ai/claude-agent-sdk` · `claude-sonnet-4-6` |
-| Container | Docker (multi-stage) · GitHub Container Registry |
+| Container | Docker (multi-stage, `node:20-slim`) · GitHub Container Registry |
+| Bundled CLIs | `gh` (GitHub CLI) · `gcloud` · `bq` (Google Cloud SDK) |
 | CI/CD | GitHub Actions · semantic-release |
 | Docs | Docusaurus 3 · GitHub Pages |
 
