@@ -28,46 +28,51 @@ export function createAgentRouter(io: Server) {
     canCreateAgents: z.boolean().optional(),
   });
 
-  router.post('/', (req, res) => {
-    const result = CreateSchema.safeParse(req.body);
-    if (!result.success) {
-      res.status(400).json({ error: result.error.flatten() });
-      return;
+  router.post('/', (req, res, next) => {
+    try {
+      const result = CreateSchema.safeParse(req.body);
+      if (!result.success) {
+        res.status(400).json({ error: result.error.flatten() });
+        return;
+      }
+
+      const teamId = result.data.teamId || 'default';
+
+      if (!roomService.hasVacantRoom(teamId)) {
+        res.status(409).json({ error: 'No vacant rooms available in this team' });
+        return;
+      }
+
+      // Inherit template repoUrl if user didn't override
+      let effectiveRepoUrl = result.data.repoUrl;
+      if (!effectiveRepoUrl && result.data.agentTemplateId) {
+        const tmpl = templateService.getAgentTemplate(result.data.agentTemplateId);
+        if (tmpl?.repoUrl) effectiveRepoUrl = tmpl.repoUrl;
+      }
+
+      const agent = agentService.createAgent({ ...result.data, teamId, repoUrl: effectiveRepoUrl });
+      if (!agent) {
+        res.status(409).json({ error: effectiveRepoUrl ? 'Failed to set up agent workspace (git clone or worktree error)' : 'No vacant rooms available' });
+        return;
+      }
+
+      if (result.data.agentTemplateId) {
+        fileService.copyWorkspaceFiles(
+          templateService.getAgentTemplateWorkspacePath(result.data.agentTemplateId),
+          agent.workspacePath,
+        );
+        // copyWorkspaceFiles replaces .claude/ entirely — re-apply permissions that
+        // createAgent wrote to settings.json before the template copy.
+        fileService.setCreateAgentsPermission(agent.workspacePath, agent.canCreateAgents ?? false);
+      }
+
+      io.emit('agent:created', agentService.toClientAgent(agent));
+      io.emit('team:list', agentService.getTeamList());
+      res.status(201).json(agentService.toClientAgent(agent));
+    } catch (err) {
+      console.error('[POST /api/agents] Unexpected error:', err);
+      next(err);
     }
-
-    const teamId = result.data.teamId || 'default';
-
-    if (!roomService.hasVacantRoom(teamId)) {
-      res.status(409).json({ error: 'No vacant rooms available in this team' });
-      return;
-    }
-
-    // Inherit template repoUrl if user didn't override
-    let effectiveRepoUrl = result.data.repoUrl;
-    if (!effectiveRepoUrl && result.data.agentTemplateId) {
-      const tmpl = templateService.getAgentTemplate(result.data.agentTemplateId);
-      if (tmpl?.repoUrl) effectiveRepoUrl = tmpl.repoUrl;
-    }
-
-    const agent = agentService.createAgent({ ...result.data, teamId, repoUrl: effectiveRepoUrl });
-    if (!agent) {
-      res.status(409).json({ error: effectiveRepoUrl ? 'Failed to set up agent workspace (git clone or worktree error)' : 'No vacant rooms available' });
-      return;
-    }
-
-    if (result.data.agentTemplateId) {
-      fileService.copyWorkspaceFiles(
-        templateService.getAgentTemplateWorkspacePath(result.data.agentTemplateId),
-        agent.workspacePath,
-      );
-      // copyWorkspaceFiles replaces .claude/ entirely — re-apply permissions that
-      // createAgent wrote to settings.json before the template copy.
-      fileService.setCreateAgentsPermission(agent.workspacePath, agent.canCreateAgents ?? false);
-    }
-
-    io.emit('agent:created', agentService.toClientAgent(agent));
-    io.emit('team:list', agentService.getTeamList());
-    res.status(201).json(agentService.toClientAgent(agent));
   });
 
   router.post('/generate-mission', async (req, res) => {
