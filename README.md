@@ -1,13 +1,35 @@
 <div align="center">
   <img src="docs/static/img/tonkatsu.png" alt="Tonkatsu" height="96" style="border-radius: 12px;" />
   <h1>Tonkatsu</h1>
-  <p><strong>A self-hosted virtual office for AI agents.</strong><br/>Multiple Claude Code agents running autonomously, collaborating in real time, and streaming live to your browser.</p>
+  <p><strong>Stop managing AI agents. Start deploying teams.</strong><br/>A self-hosted virtual office where Claude Code agents collaborate autonomously, delegate to each other, and stream every token live to your browser.</p>
 
   [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-  [![CI](https://github.com/pierredosne-fin/data-platform-tonkatsu/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/pierredosne-fin/data-platform-tonkatsu/actions)
-  [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-brightgreen)](https://pierredosne-fin.github.io/data-platform-tonkatsu/)
+  [![CI](https://github.com/pierredosne-fin/tonkatsu-ai/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/pierredosne-fin/tonkatsu-ai/actions)
+  [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-brightgreen)](https://pierredosne-fin.github.io/tonkatsu-ai/)
   [![Node](https://img.shields.io/badge/node-%3E%3D20-green)](https://nodejs.org)
 </div>
+
+---
+
+> ⚡ **30-second install**
+>
+> ```bash
+> git clone https://github.com/pierredosne-fin/tonkatsu-ai.git
+> cd tonkatsu-ai
+> npm install
+> echo "ANTHROPIC_API_KEY=sk-ant-..." > server/.env
+> npm run dev
+> ```
+
+---
+
+## Why Tonkatsu?
+
+Most AI agent frameworks hand you a Python library and tell you to figure out the wiring. Tonkatsu is different:
+
+- **Self-hosted privacy** — your Anthropic API key and every byte of agent memory stay on your own server. Nothing touches a third-party cloud.
+- **Real-time streaming** — every token from every agent streams live to your browser via Socket.IO. You see exactly what each agent is thinking, writing, and deciding — as it happens.
+- **Agent delegation** — agents hand off subtasks to other agents automatically, up to 5 levels deep. You talk to the coordinator; it orchestrates the rest. No manual chaining, no glue code.
 
 ---
 
@@ -37,8 +59,8 @@ Tonkatsu is an open-source platform where you build a team of AI agents, give ea
 ### Install & run
 
 ```bash
-git clone https://github.com/pierredosne-fin/data-platform-tonkatsu.git
-cd data-platform-tonkatsu
+git clone https://github.com/pierredosne-fin/tonkatsu-ai.git
+cd tonkatsu-ai
 npm install
 ```
 
@@ -82,7 +104,7 @@ docker run \
 Production images are published to GitHub Container Registry on every release:
 
 ```bash
-docker pull ghcr.io/pierredosne-fin/data-platform-tonkatsu:latest
+docker pull ghcr.io/pierredosne-fin/tonkatsu-ai:latest
 ```
 
 ---
@@ -123,6 +145,34 @@ docker pull ghcr.io/pierredosne-fin/data-platform-tonkatsu:latest
 
 ---
 
+## Architecture
+
+```mermaid
+graph LR
+    Browser["🌐 Browser\n(React 19 + Vite)"]
+    Server["⚙️ Express Server\n(Socket.IO)"]
+    SDK["🤖 Claude Agent SDK\n(claude-sonnet-4-6)"]
+    Workspaces["📁 Agent Workspaces\n(per-agent dirs)"]
+
+    Browser -- "WebSocket\n(Socket.IO)" --> Server
+    Server -- "spawn / stream tokens" --> SDK
+    SDK -- "reads & writes files" --> Workspaces
+
+    subgraph Delegation ["Agent Delegation (up to 5 levels)"]
+        A1["Agent A\n(coordinator)"]
+        A2["Agent B\n(specialist)"]
+        A3["Agent C\n(specialist)"]
+        A1 -- "delegate subtask" --> A2
+        A1 -- "delegate subtask" --> A3
+        A2 -- "result" --> A1
+        A3 -- "result" --> A1
+    end
+
+    SDK --> Delegation
+```
+
+---
+
 ## CI/CD
 
 | Workflow | Trigger | What it does |
@@ -138,13 +188,29 @@ Trigger a release manually from **Actions → Manual Release → Run workflow**.
 
 ## Documentation
 
-Full documentation is available at **[pierredosne-fin.github.io/data-platform-tonkatsu](https://pierredosne-fin.github.io/data-platform-tonkatsu/)**.
+Full documentation is available at **[pierredosne-fin.github.io/tonkatsu-ai](https://pierredosne-fin.github.io/tonkatsu-ai/)**.
 
 To run docs locally:
 
 ```bash
 cd docs && npm install && npm run start
 ```
+
+---
+
+## How it compares
+
+| Feature | Tonkatsu | CrewAI | AutoGen | LangGraph |
+|---------|----------|--------|---------|-----------|
+| Self-hosted | ✅ Fully self-hosted | ⚠️ Cloud offering exists | ✅ Self-hosted | ✅ Self-hosted |
+| Real-time UI | ✅ Live token streaming | ❌ Code-only | ❌ Code-only | ❌ Code-only |
+| Agent-to-agent delegation | ✅ Up to 5 levels deep | ✅ Role-based crews | ✅ Group chat model | ⚠️ Manual graph wiring |
+| Git repo integration | ✅ Branch + worktree per agent | ❌ | ❌ | ❌ |
+| Persistent memory | ✅ Survives restarts | ⚠️ Plugin-based | ⚠️ Plugin-based | ⚠️ Plugin-based |
+| Cron scheduling | ✅ Built-in | ❌ | ❌ | ❌ |
+| Browser-based monitoring | ✅ Visual office grid | ❌ | ❌ | ⚠️ LangSmith (external) |
+| Primary interface | Both (UI + API) | Code | Code | Code |
+| Underlying model | Claude only | Any | Any | Any |
 
 ---
 
