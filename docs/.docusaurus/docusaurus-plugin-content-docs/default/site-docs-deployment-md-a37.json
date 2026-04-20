@@ -1,11 +1,11 @@
 {
   "id": "deployment",
   "title": "Deployment",
-  "description": "Running Tonkatsu in production requires building both packages, configuring the server environment, and optionally setting up a reverse proxy and process manager.",
+  "description": "Tonkatsu can be deployed as a Docker image (recommended) or by running the compiled Node.js output directly with a process manager. Both approaches are covered below.",
   "source": "@site/docs/deployment.md",
   "sourceDirName": ".",
   "slug": "/deployment",
-  "permalink": "/docs/deployment",
+  "permalink": "/tonkatsu-ai/docs/deployment",
   "draft": false,
   "unlisted": false,
   "tags": [],
@@ -19,6 +19,6 @@
   "sidebar": "docs",
   "previous": {
     "title": "Security",
-    "permalink": "/docs/security"
+    "permalink": "/tonkatsu-ai/docs/security"
   }
 }

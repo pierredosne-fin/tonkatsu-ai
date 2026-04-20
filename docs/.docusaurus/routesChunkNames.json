@@ -1,125 +1,125 @@
 {
-  "/__docusaurus/debug-5ff": {
+  "/tonkatsu-ai/__docusaurus/debug-86e": {
     "__comp": "__comp---theme-debug-config-23-a-2ff",
     "__context": {
-      "plugin": "plugin---docusaurus-debugb-38-ad3"
+      "plugin": "plugin---tonkatsu-ai-docusaurus-debugb-38-413"
     }
   },
-  "/__docusaurus/debug/config-5ba": {
+  "/tonkatsu-ai/__docusaurus/debug/config-9ae": {
     "__comp": "__comp---theme-debug-config-23-a-2ff",
     "__context": {
-      "plugin": "plugin---docusaurus-debugb-38-ad3"
+      "plugin": "plugin---tonkatsu-ai-docusaurus-debugb-38-413"
     }
   },
-  "/__docusaurus/debug/content-a2b": {
+  "/tonkatsu-ai/__docusaurus/debug/content-c8d": {
     "__comp": "__comp---theme-debug-contentba-8-ce7",
     "__context": {
-      "plugin": "plugin---docusaurus-debugb-38-ad3"
+      "plugin": "plugin---tonkatsu-ai-docusaurus-debugb-38-413"
     },
-    "__props": "__props---docusaurus-debug-content-3-c-0-be2"
+    "__props": "__props---tonkatsu-ai-docusaurus-debug-content-4-ba-9e1"
   },
-  "/__docusaurus/debug/globalData-c3c": {
+  "/tonkatsu-ai/__docusaurus/debug/globalData-14d": {
     "__comp": "__comp---theme-debug-global-dataede-0fa",
     "__context": {
-      "plugin": "plugin---docusaurus-debugb-38-ad3"
+      "plugin": "plugin---tonkatsu-ai-docusaurus-debugb-38-413"
     }
   },
-  "/__docusaurus/debug/metadata-156": {
+  "/tonkatsu-ai/__docusaurus/debug/metadata-401": {
     "__comp": "__comp---theme-debug-site-metadata-68-e-3d4",
     "__context": {
-      "plugin": "plugin---docusaurus-debugb-38-ad3"
+      "plugin": "plugin---tonkatsu-ai-docusaurus-debugb-38-413"
     }
   },
-  "/__docusaurus/debug/registry-88c": {
+  "/tonkatsu-ai/__docusaurus/debug/registry-29b": {
     "__comp": "__comp---theme-debug-registry-679-501",
     "__context": {
-      "plugin": "plugin---docusaurus-debugb-38-ad3"
+      "plugin": "plugin---tonkatsu-ai-docusaurus-debugb-38-413"
     }
   },
-  "/__docusaurus/debug/routes-000": {
+  "/tonkatsu-ai/__docusaurus/debug/routes-ad4": {
     "__comp": "__comp---theme-debug-routes-946-699",
     "__context": {
-      "plugin": "plugin---docusaurus-debugb-38-ad3"
+      "plugin": "plugin---tonkatsu-ai-docusaurus-debugb-38-413"
     }
   },
-  "/docs-3d6": {
+  "/tonkatsu-ai/docs-3da": {
     "__comp": "__comp---theme-docs-root-5-e-9-0b6",
     "__context": {
-      "plugin": "plugin---docsaba-d7c"
+      "plugin": "plugin---tonkatsu-ai-docsaba-c88"
     }
   },
-  "/docs-40d": {
+  "/tonkatsu-ai/docs-d2d": {
     "__comp": "__comp---theme-doc-version-roota-7-b-5de",
-    "__props": "__props---docs-005-788"
+    "__props": "__props---tonkatsu-ai-docsc-8-a-546"
   },
-  "/docs-a6d": {
+  "/tonkatsu-ai/docs-db6": {
     "__comp": "__comp---theme-doc-roota-94-67a"
   },
-  "/docs/api/rest-api-183": {
+  "/tonkatsu-ai/docs/api/rest-api-b08": {
     "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-api-rest-apic-47-e65"
+    "content": "content---tonkatsu-ai-docs-api-rest-apic-47-a9f"
   },
-  "/docs/api/socket-events-8b2": {
+  "/tonkatsu-ai/docs/api/socket-events-427": {
     "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-api-socket-events-34-f-f64"
+    "content": "content---tonkatsu-ai-docs-api-socket-events-34-f-116"
   },
-  "/docs/architecture/agent-workspace-e49": {
+  "/tonkatsu-ai/docs/architecture/agent-workspace-c9b": {
     "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-architecture-agent-workspace-926-466"
+    "content": "content---tonkatsu-ai-docs-architecture-agent-workspace-926-d13"
   },
-  "/docs/architecture/client-7f2": {
+  "/tonkatsu-ai/docs/architecture/client-da3": {
     "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-architecture-client-225-ec7"
+    "content": "content---tonkatsu-ai-docs-architecture-client-225-3ad"
   },
-  "/docs/architecture/overview-304": {
+  "/tonkatsu-ai/docs/architecture/overview-468": {
     "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-architecture-overview-0-b-1-a4c"
+    "content": "content---tonkatsu-ai-docs-architecture-overview-0-b-1-dcd"
   },
-  "/docs/architecture/server-604": {
+  "/tonkatsu-ai/docs/architecture/server-f42": {
     "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-architecture-server-45-d-5fc"
+    "content": "content---tonkatsu-ai-docs-architecture-server-45-d-dd8"
   },
-  "/docs/deployment-3c3": {
+  "/tonkatsu-ai/docs/deployment-7c5": {
     "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-deploymenta-37-88b"
+    "content": "content---tonkatsu-ai-docs-deploymenta-37-471"
   },
-  "/docs/examples/first-agent-5a2": {
+  "/tonkatsu-ai/docs/examples/first-agent-e4b": {
     "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-examples-first-agenta-9-f-62a"
+    "content": "content---tonkatsu-ai-docs-examples-first-agenta-9-f-b64"
   },
-  "/docs/examples/multi-agent-team-c6d": {
+  "/tonkatsu-ai/docs/examples/multi-agent-team-c1c": {
     "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-examples-multi-agent-team-5-fe-a58"
+    "content": "content---tonkatsu-ai-docs-examples-multi-agent-team-5-fe-849"
   },
-  "/docs/examples/repo-backed-agent-d4f": {
+  "/tonkatsu-ai/docs/examples/repo-backed-agent-3ca": {
     "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-examples-repo-backed-agent-38-a-b28"
+    "content": "content---tonkatsu-ai-docs-examples-repo-backed-agent-38-a-bd0"
   },
-  "/docs/examples/scheduled-tasks-d95": {
+  "/tonkatsu-ai/docs/examples/scheduled-tasks-3b9": {
     "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-examples-scheduled-tasks-543-f9f"
+    "content": "content---tonkatsu-ai-docs-examples-scheduled-tasks-543-bf0"
   },
-  "/docs/getting-started-565": {
+  "/tonkatsu-ai/docs/getting-started-f3a": {
     "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-getting-startedd-58-f94"
+    "content": "content---tonkatsu-ai-docs-getting-startedd-58-887"
   },
-  "/docs/intro-a6e": {
+  "/tonkatsu-ai/docs/intro-857": {
     "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-intro-0-e-3-be1"
+    "content": "content---tonkatsu-ai-docs-intro-0-e-3-0c5"
   },
-  "/docs/security-e6a": {
+  "/tonkatsu-ai/docs/security-369": {
     "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-securitydb-3-ce2"
+    "content": "content---tonkatsu-ai-docs-securitydb-3-a58"
   },
-  "/docs/troubleshooting-e35": {
+  "/tonkatsu-ai/docs/troubleshooting-402": {
     "__comp": "__comp---theme-doc-item-178-a40",
-    "content": "content---docs-troubleshooting-9-d-9-0bf"
+    "content": "content---tonkatsu-ai-docs-troubleshooting-9-d-9-d8e"
   },
-  "/-e5f": {
+  "/tonkatsu-ai/-f55": {
     "__comp": "__comp---site-src-pages-index-tsx-1-df-d3e",
     "__context": {
-      "plugin": "plugin---a-74-9d6"
+      "plugin": "plugin---tonkatsu-ai-a-74-ae1"
     },
-    "config": "config---5-e-9-4f3"
+    "config": "config---tonkatsu-ai-5-e-9-fa6"
   }
 }

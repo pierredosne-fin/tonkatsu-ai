@@ -7,6 +7,9 @@
   [![CI](https://github.com/pierredosne-fin/tonkatsu-ai/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/pierredosne-fin/tonkatsu-ai/actions)
   [![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-brightgreen)](https://pierredosne-fin.github.io/tonkatsu-ai/)
   [![Node](https://img.shields.io/badge/node-%3E%3D20-green)](https://nodejs.org)
+
+  <br/>
+  <video src="docs/static/img/introduction.mp4" controls width="100%"></video>
 </div>
 
 ---

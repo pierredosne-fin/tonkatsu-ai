@@ -5,7 +5,7 @@
   "source": "@site/docs/examples/scheduled-tasks.md",
   "sourceDirName": "examples",
   "slug": "/examples/scheduled-tasks",
-  "permalink": "/docs/examples/scheduled-tasks",
+  "permalink": "/tonkatsu-ai/docs/examples/scheduled-tasks",
   "draft": false,
   "unlisted": false,
   "tags": [],
@@ -19,10 +19,10 @@
   "sidebar": "docs",
   "previous": {
     "title": "Repo-Backed Agent",
-    "permalink": "/docs/examples/repo-backed-agent"
+    "permalink": "/tonkatsu-ai/docs/examples/repo-backed-agent"
   },
   "next": {
     "title": "Troubleshooting",
-    "permalink": "/docs/troubleshooting"
+    "permalink": "/tonkatsu-ai/docs/troubleshooting"
   }
 }
