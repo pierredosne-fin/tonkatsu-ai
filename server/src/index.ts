@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { PORT, READ_ONLY } from './config.js';
 import { createAgentRouter, createRoomsRouter, createTeamsRouter } from './routes/agents.js';
+import { createDetailRouter } from './routes/detail.js';
 import { createWorkspacesRouter } from './routes/workspaces.js';
 import { createTemplatesRouter } from './routes/templates.js';
 import { createSchedulesRouter } from './routes/schedules.js';
@@ -58,6 +59,7 @@ if (READ_ONLY) {
 app.use('/api/agents', createAgentRouter(io));
 app.use('/api/rooms', createRoomsRouter());
 app.use('/api/teams', createTeamsRouter(io));
+app.use('/api', createDetailRouter(io));
 app.use('/api/workspaces', createWorkspacesRouter());
 app.use('/api/templates', createTemplatesRouter(io));
 app.use('/api/schedules', createSchedulesRouter(io));
