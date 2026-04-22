@@ -88,7 +88,10 @@ export function writeSettings(workspacePath: string, content: string): void {
   safeWrite(join(workspacePath, '.claude', 'settings.json'), content);
 }
 
-const CREATE_AGENTS_PERMISSION = 'Bash(curl -s -X POST http://localhost:3001/api/agents*)';
+const CREATE_AGENTS_PERMISSIONS = [
+  'Bash(curl -s -X POST http://localhost:3001/api/agents*)',
+  'Bash(curl -s http://localhost:3001/api/templates/agents*)',
+];
 
 
 export function setCreateAgentsPermission(workspacePath: string, enabled: boolean): void {
@@ -102,15 +105,16 @@ export function setCreateAgentsPermission(workspacePath: string, enabled: boolea
   }
 
   const perms = settings.permissions as Record<string, unknown> | undefined ?? {};
-  const allow = Array.isArray(perms.allow) ? [...perms.allow as string[]] : [];
+  let allow = Array.isArray(perms.allow) ? [...perms.allow as string[]] : [];
 
   if (enabled) {
-    if (!allow.includes(CREATE_AGENTS_PERMISSION)) {
-      allow.push(CREATE_AGENTS_PERMISSION);
+    for (const perm of CREATE_AGENTS_PERMISSIONS) {
+      if (!allow.includes(perm)) {
+        allow.push(perm);
+      }
     }
   } else {
-    const idx = allow.indexOf(CREATE_AGENTS_PERMISSION);
-    if (idx !== -1) allow.splice(idx, 1);
+    allow = allow.filter((p) => !CREATE_AGENTS_PERMISSIONS.includes(p));
   }
 
   settings.permissions = { ...perms, allow };
