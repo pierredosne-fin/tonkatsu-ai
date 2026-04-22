@@ -28,6 +28,7 @@ export default function App() {
   const [chatAgentId, setChatAgentId] = useState<string | null>(null);
   const [editAgentId, setEditAgentId] = useState<string | null>(null);
   const agents = useAgentStore((s) => s.agents);
+  const pendingFanOut = useAgentStore((s) => s.pendingFanOut);
 
   useEffect(() => {
     fetchConfig();
@@ -139,7 +140,7 @@ export default function App() {
       )}
 
       <ToastStack />
-      <FanOutModal />
+      <FanOutModal key={pendingFanOut?.id ?? 'none'} />
       {showSync && <WorkspaceSyncModal onClose={() => setShowSync(false)} />}
       {showTemplates && <TemplatesPanel onClose={() => setShowTemplates(false)} />}
     </div>

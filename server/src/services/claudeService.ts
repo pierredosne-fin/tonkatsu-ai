@@ -11,7 +11,10 @@ import { emitThrottledStream, emitToZoomedRooms } from './zoomService.js';
 const NEED_INPUT_RE = /<NEED_INPUT>([\s\S]*?)<\/NEED_INPUT>/;
 const CALL_AGENT_RE = /<CALL_AGENT name="([^"]+)">([\s\S]*?)<\/CALL_AGENT>/;
 const FAN_OUT_RE = /<FAN_OUT>([\s\S]*?)<\/FAN_OUT>/;
-const TASK_RE = /<TASK agent="([^"]+)">([\s\S]*?)<\/TASK>/g;
+// NOTE: TASK_RE is intentionally NOT a module-level constant with /g flag.
+// A module-level global regex retains lastIndex across calls, causing matchAll
+// to find no tasks on the second and subsequent FAN_OUT dispatches in the same
+// process lifetime. Always construct a fresh regex per call site instead.
 const MAX_CALL_DEPTH = 5;
 const FAN_OUT_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -369,6 +372,7 @@ export async function runAgentTask(
       return;
     }
 
+    // Strip FAN_OUT block before displaying; keep surrounding text
     const fanOutMatch = FAN_OUT_RE.exec(finalText);
     const displayText = (fanOutMatch ? finalText.replace(FAN_OUT_RE, '') : finalText).trim();
     if (displayText) {
@@ -377,7 +381,9 @@ export async function runAgentTask(
 
     if (fanOutMatch) {
       const tasks: FanOutTask[] = [];
-      for (const m of fanOutMatch[1].matchAll(TASK_RE)) {
+      // Use a fresh regex literal — never a module-level /g regex — to avoid
+      // lastIndex bleed-over that silences all dispatches after the first.
+      for (const m of fanOutMatch[1].matchAll(/<TASK agent="([^"]+)">([\s\S]*?)<\/TASK>/g)) {
         tasks.push({ agent: m[1], prompt: m[2].trim() });
       }
 
