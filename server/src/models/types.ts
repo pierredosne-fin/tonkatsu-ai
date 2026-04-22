@@ -110,6 +110,7 @@ export interface CronSchedule {
   enabled: boolean;
   createdAt: string;
   lastFiredAt?: string;
+  expiresAt?: string; // ISO string — schedule auto-deletes when this passes
 }
 
 export interface FanOutTask {

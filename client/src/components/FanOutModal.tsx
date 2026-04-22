@@ -8,6 +8,13 @@ const CRON_OPTIONS = [
   { label: 'Every hour',   cron: '0 * * * *' },
 ];
 
+const TTL_OPTIONS = [
+  { label: '30 min',  ms: 30 * 60 * 1000 },
+  { label: '1 hour',  ms: 60 * 60 * 1000 },
+  { label: '4 hours', ms: 4 * 60 * 60 * 1000 },
+  { label: '1 day',   ms: 24 * 60 * 60 * 1000 },
+];
+
 type Step = 'confirm' | 'cron';
 
 export function FanOutModal() {
@@ -19,6 +26,7 @@ export function FanOutModal() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedCron, setSelectedCron] = useState(CRON_OPTIONS[1].cron);
+  const [selectedTtlMs, setSelectedTtlMs] = useState(TTL_OPTIONS[1].ms);
 
   if (!proposal) return null;
 
@@ -65,6 +73,7 @@ export function FanOutModal() {
           cronExpression: selectedCron,
           message: `Check on the progress of the parallel tasks you dispatched to: ${agentNames}. Report a brief status update for each.`,
           enabled: true,
+          ttlMs: selectedTtlMs,
         }),
       });
       if (!res.ok) {
@@ -91,25 +100,43 @@ export function FanOutModal() {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            {CRON_OPTIONS.map((opt) => (
-              <button
-                key={opt.cron}
-                onClick={() => setSelectedCron(opt.cron)}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition border ${
-                  selectedCron === opt.cron
-                    ? 'bg-indigo-600 border-indigo-500 text-white'
-                    : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
+          <div>
+            <p className="text-zinc-500 text-xs mb-2">Check interval</p>
+            <div className="grid grid-cols-2 gap-2">
+              {CRON_OPTIONS.map((opt) => (
+                <button
+                  key={opt.cron}
+                  onClick={() => setSelectedCron(opt.cron)}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition border ${
+                    selectedCron === opt.cron
+                      ? 'bg-indigo-600 border-indigo-500 text-white'
+                      : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <p className="text-zinc-500 text-xs">
-            A cron will message {fromAgent?.name ?? 'the agent'} on the selected interval asking for a status report.
-          </p>
+          <div>
+            <p className="text-zinc-500 text-xs mb-2">Stop after</p>
+            <div className="grid grid-cols-4 gap-2">
+              {TTL_OPTIONS.map((opt) => (
+                <button
+                  key={opt.ms}
+                  onClick={() => setSelectedTtlMs(opt.ms)}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition border ${
+                    selectedTtlMs === opt.ms
+                      ? 'bg-indigo-600 border-indigo-500 text-white'
+                      : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {error && <p className="text-red-400 text-xs">{error}</p>}
 

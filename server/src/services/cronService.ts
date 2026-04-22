@@ -9,12 +9,21 @@ import { runAgentTask } from './claudeService.js';
 const schedules = new Map<string, CronSchedule>();
 const tasks = new Map<string, cron.ScheduledTask>();
 
+const DEFAULT_TTL_MS = 60 * 60 * 1000; // 1 hour
+
 function registerCronJob(schedule: CronSchedule, io: Server): void {
   if (!cron.validate(schedule.cronExpression)) {
     console.warn(`[cronService] Invalid cron expression for schedule ${schedule.id}: "${schedule.cronExpression}"`);
     return;
   }
   const task = cron.schedule(schedule.cronExpression, () => {
+    // Auto-delete if TTL has passed
+    if (schedule.expiresAt && new Date() >= new Date(schedule.expiresAt)) {
+      console.log(`[cronService] Schedule ${schedule.id} expired, removing`);
+      deleteSchedule(schedule.id);
+      return;
+    }
+
     const agent = getAgent(schedule.agentId);
     if (!agent) {
       console.warn(`[cronService] Agent ${schedule.agentId} not found for schedule ${schedule.id}, skipping`);
@@ -46,26 +55,31 @@ function stopTask(scheduleId: string): void {
 
 export function initSchedules(io: Server): void {
   const loaded = loadSchedules();
+  const now = new Date();
+  let skipped = 0;
   for (const s of loaded) {
-    schedules.set(s.id, s);
-    if (s.enabled) {
-      registerCronJob(s, io);
+    if (s.expiresAt && new Date(s.expiresAt) <= now) {
+      skipped++;
+      continue; // discard expired schedules on startup
     }
-  }
-  console.log(`[cronService] Loaded ${loaded.length} schedule(s)`);
-}
-
-export function reloadSchedules(io: Server): void {
-  // Stop and clear all existing tasks
-  for (const [id] of tasks) stopTask(id);
-  schedules.clear();
-  // Re-load from disk and re-register
-  const loaded = loadSchedules();
-  for (const s of loaded) {
     schedules.set(s.id, s);
     if (s.enabled) registerCronJob(s, io);
   }
-  console.log(`[cronService] Reloaded ${loaded.length} schedule(s)`);
+  if (skipped > 0) saveSchedules(Array.from(schedules.values()));
+  console.log(`[cronService] Loaded ${schedules.size} schedule(s), discarded ${skipped} expired`);
+}
+
+export function reloadSchedules(io: Server): void {
+  for (const [id] of tasks) stopTask(id);
+  schedules.clear();
+  const loaded = loadSchedules();
+  const now = new Date();
+  for (const s of loaded) {
+    if (s.expiresAt && new Date(s.expiresAt) <= now) continue;
+    schedules.set(s.id, s);
+    if (s.enabled) registerCronJob(s, io);
+  }
+  console.log(`[cronService] Reloaded ${schedules.size} schedule(s)`);
 }
 
 export function getAllSchedules(): CronSchedule[] {
@@ -77,12 +91,13 @@ export function getSchedulesForAgent(agentId: string): CronSchedule[] {
 }
 
 export function createSchedule(
-  params: { agentId: string; cronExpression: string; message: string; enabled?: boolean },
+  params: { agentId: string; cronExpression: string; message: string; enabled?: boolean; ttlMs?: number },
   io: Server,
 ): CronSchedule | { error: string } {
   if (!cron.validate(params.cronExpression)) {
     return { error: 'Invalid cron expression' };
   }
+  const ttlMs = params.ttlMs ?? DEFAULT_TTL_MS;
   const schedule: CronSchedule = {
     id: randomUUID(),
     agentId: params.agentId,
@@ -90,6 +105,7 @@ export function createSchedule(
     message: params.message,
     enabled: params.enabled ?? true,
     createdAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + ttlMs).toISOString(),
   };
   schedules.set(schedule.id, schedule);
   saveSchedules(Array.from(schedules.values()));
