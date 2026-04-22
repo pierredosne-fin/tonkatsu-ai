@@ -13,6 +13,10 @@ const ROOMS: RoomType[] = Array.from({ length: GRID_COLS * GRID_ROWS }, (_, i) =
   gridRow: Math.floor(i / GRID_COLS) + 1,
 }));
 
+const MIN_ZOOM = 0.25;
+const MAX_ZOOM = 4.0;
+const ZOOM_STEP = 1.2;
+
 interface Props {
   onAgentClick: (agentId: string) => void;
   onEmptyRoomClick?: (roomId: string) => void;
@@ -33,6 +37,13 @@ interface DragState {
   y: number;
 }
 
+interface PanStart {
+  mouseX: number;
+  mouseY: number;
+  panX: number;
+  panY: number;
+}
+
 export function OfficeMap({ onAgentClick, onEmptyRoomClick, onEditAgent, onDeleteAgent }: Props) {
   const agents = useAgentStore((s) => s.agents);
   const currentTeamId = useAgentStore((s) => s.currentTeamId);
@@ -48,15 +59,32 @@ export function OfficeMap({ onAgentClick, onEmptyRoomClick, onEditAgent, onDelet
     });
   };
 
+  // ── Card drag state ───────────────────────────────────────────────────────
+
   const [drag, setDrag] = useState<DragState | null>(null);
   const [hoverRoomId, setHoverRoomId] = useState<string | null>(null);
   const [lines, setLines] = useState<DelegationLine[]>([]);
 
-  // Refs so event handlers always see the latest values without re-registering
   const hoverRoomRef = useRef<string | null>(null);
   const agentByRoomRef = useRef<Map<string, Agent>>(new Map());
   const dragRef = useRef<DragState | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+
+  // ── Pan/zoom state ────────────────────────────────────────────────────────
+
+  const [zoom, setZoom] = useState(1.0);
+  const [panX, setPanX] = useState(0);
+  const [panY, setPanY] = useState(0);
+  const [isPanning, setIsPanning] = useState(false);
+
+  // Refs so event handlers always see latest values without stale closures
+  const zoomRef = useRef(1.0);
+  const panXRef = useRef(0);
+  const panYRef = useRef(0);
+  const panStartRef = useRef<PanStart | null>(null);
+  const mapRef = useRef<HTMLDivElement>(null);
+
+  // ── Team agents ───────────────────────────────────────────────────────────
 
   const teamAgents = useMemo(
     () => (currentTeamId ? agents.filter((a) => a.teamId === currentTeamId) : agents),
@@ -71,6 +99,7 @@ export function OfficeMap({ onAgentClick, onEmptyRoomClick, onEditAgent, onDelet
   const computeLines = useCallback(() => {
     if (!gridRef.current || activeDelegations.size === 0) { setLines([]); return; }
     const gridRect = gridRef.current.getBoundingClientRect();
+    const z = zoomRef.current;
     const result: DelegationLine[] = [];
     for (const [fromAgentId, toAgentId] of activeDelegations.entries()) {
       const fromAgent = teamAgents.find((a) => a.id === fromAgentId);
@@ -81,11 +110,12 @@ export function OfficeMap({ onAgentClick, onEmptyRoomClick, onEditAgent, onDelet
       if (!fromEl || !toEl) continue;
       const fr = fromEl.getBoundingClientRect();
       const tr = toEl.getBoundingClientRect();
+      // Divide by zoom to convert screen-space deltas to SVG (grid) coordinates
       result.push({
-        x1: fr.left - gridRect.left + fr.width / 2,
-        y1: fr.top  - gridRect.top  + fr.height / 2,
-        x2: tr.left - gridRect.left + tr.width / 2,
-        y2: tr.top  - gridRect.top  + tr.height / 2,
+        x1: (fr.left - gridRect.left + fr.width / 2) / z,
+        y1: (fr.top  - gridRect.top  + fr.height / 2) / z,
+        x2: (tr.left - gridRect.left + tr.width / 2) / z,
+        y2: (tr.top  - gridRect.top  + tr.height / 2) / z,
         color: fromAgent.avatarColor,
       });
     }
@@ -98,7 +128,7 @@ export function OfficeMap({ onAgentClick, onEmptyRoomClick, onEditAgent, onDelet
     return () => window.removeEventListener('resize', computeLines);
   }, [computeLines]);
 
-  // ── Custom mouse drag ─────────────────────────────────────────────────────
+  // ── Card drag ─────────────────────────────────────────────────────────────
 
   const startDrag = useCallback((agent: Agent, sourceRoomId: string, e: React.MouseEvent) => {
     e.preventDefault();
@@ -116,7 +146,6 @@ export function OfficeMap({ onAgentClick, onEmptyRoomClick, onEditAgent, onDelet
       dragRef.current = next;
       setDrag(next);
 
-      // Hide the ghost so elementFromPoint can see what's underneath
       const ghostEl = document.querySelector('.drag-ghost') as HTMLElement | null;
       if (ghostEl) ghostEl.style.display = 'none';
       const el = document.elementFromPoint(e.clientX, e.clientY);
@@ -150,49 +179,166 @@ export function OfficeMap({ onAgentClick, onEmptyRoomClick, onEditAgent, onDelet
     };
   }, [drag?.agent.id, swapAgentRooms, moveAgentRoom]);
 
-  return (
-    <div className="office-map">
-      <div className="office-grid" ref={gridRef}>
-        {ROOMS.map((room) => (
-          <Room
-            key={room.id}
-            room={room}
-            agent={agentByRoom.get(room.id)}
-            onAgentClick={onAgentClick}
-            onEmptyRoomClick={!agentByRoom.get(room.id) && onEmptyRoomClick ? () => onEmptyRoomClick(room.id) : undefined}
-            isDragging={drag?.sourceRoomId === room.id}
-            isDropTarget={hoverRoomId === room.id && drag?.sourceRoomId !== room.id}
-            onMouseDown={(agent, e) => startDrag(agent, room.id, e)}
-            onRenameAgent={handleRenameAgent}
-            onEditAgent={onEditAgent}
-            onDeleteAgent={onDeleteAgent}
-          />
-        ))}
+  // ── Zoom (non-passive wheel) ──────────────────────────────────────────────
 
-        {lines.length > 0 && (
-          <svg className="office-delegation-svg" aria-hidden="true">
-            <defs>
+  useEffect(() => {
+    const el = mapRef.current;
+    if (!el) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const factor = e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
+      const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoomRef.current * factor));
+      const ratio = newZoom / zoomRef.current;
+      const newPanX = mx - (mx - panXRef.current) * ratio;
+      const newPanY = my - (my - panYRef.current) * ratio;
+
+      zoomRef.current = newZoom;
+      panXRef.current = newPanX;
+      panYRef.current = newPanY;
+      setZoom(newZoom);
+      setPanX(newPanX);
+      setPanY(newPanY);
+    };
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, []);
+
+  // ── Pan (click-drag on background) ───────────────────────────────────────
+
+  const onBoardMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    // Ignore if clicking inside a room card or zoom controls
+    if ((e.target as Element).closest('[data-room-id]')) return;
+    if ((e.target as Element).closest('.zoom-controls')) return;
+    // Ignore if a card drag is already active
+    if (dragRef.current) return;
+
+    e.preventDefault();
+    panStartRef.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      panX: panXRef.current,
+      panY: panYRef.current,
+    };
+    setIsPanning(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isPanning) return;
+
+    const onMove = (e: MouseEvent) => {
+      const start = panStartRef.current;
+      if (!start) return;
+      const newPanX = start.panX + (e.clientX - start.mouseX);
+      const newPanY = start.panY + (e.clientY - start.mouseY);
+      panXRef.current = newPanX;
+      panYRef.current = newPanY;
+      setPanX(newPanX);
+      setPanY(newPanY);
+    };
+
+    const onUp = () => {
+      panStartRef.current = null;
+      setIsPanning(false);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [isPanning]);
+
+  // ── Zoom buttons ──────────────────────────────────────────────────────────
+
+  const applyZoomButton = useCallback((factor: number) => {
+    const el = mapRef.current;
+    const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoomRef.current * factor));
+    const ratio = newZoom / zoomRef.current;
+    let newPanX = panXRef.current;
+    let newPanY = panYRef.current;
+    if (el) {
+      const mx = el.clientWidth / 2;
+      const my = el.clientHeight / 2;
+      newPanX = mx - (mx - panXRef.current) * ratio;
+      newPanY = my - (my - panYRef.current) * ratio;
+    }
+    zoomRef.current = newZoom;
+    panXRef.current = newPanX;
+    panYRef.current = newPanY;
+    setZoom(newZoom);
+    setPanX(newPanX);
+    setPanY(newPanY);
+  }, []);
+
+  const resetView = useCallback(() => {
+    zoomRef.current = 1.0;
+    panXRef.current = 0;
+    panYRef.current = 0;
+    setZoom(1.0);
+    setPanX(0);
+    setPanY(0);
+  }, []);
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  return (
+    <div
+      className={`office-map${isPanning ? ' is-panning' : ''}`}
+      ref={mapRef}
+      onMouseDown={onBoardMouseDown}
+    >
+      <div
+        className="board-canvas"
+        style={{ transform: `translate(${panX}px, ${panY}px) scale(${zoom})` }}
+      >
+        <div className="office-grid" ref={gridRef}>
+          {ROOMS.map((room) => (
+            <Room
+              key={room.id}
+              room={room}
+              agent={agentByRoom.get(room.id)}
+              onAgentClick={onAgentClick}
+              onEmptyRoomClick={!agentByRoom.get(room.id) && onEmptyRoomClick ? () => onEmptyRoomClick(room.id) : undefined}
+              isDragging={drag?.sourceRoomId === room.id}
+              isDropTarget={hoverRoomId === room.id && drag?.sourceRoomId !== room.id}
+              onMouseDown={(agent, e) => startDrag(agent, room.id, e)}
+              onRenameAgent={handleRenameAgent}
+              onEditAgent={onEditAgent}
+              onDeleteAgent={onDeleteAgent}
+            />
+          ))}
+
+          {lines.length > 0 && (
+            <svg className="office-delegation-svg" aria-hidden="true">
+              <defs>
+                {lines.map((line, i) => (
+                  <marker key={i} id={`arrow-${i}`} markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                    <path d="M0,0 L0,6 L6,3 z" fill={line.color} opacity="0.8" />
+                  </marker>
+                ))}
+              </defs>
               {lines.map((line, i) => (
-                <marker key={i} id={`arrow-${i}`} markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                  <path d="M0,0 L0,6 L6,3 z" fill={line.color} opacity="0.8" />
-                </marker>
+                <line
+                  key={i}
+                  x1={line.x1} y1={line.y1} x2={line.x2} y2={line.y2}
+                  stroke={line.color} strokeWidth="2" strokeDasharray="8 5"
+                  strokeLinecap="round" opacity="0.75"
+                  markerEnd={`url(#arrow-${i})`}
+                  className="delegation-dash-line"
+                />
               ))}
-            </defs>
-            {lines.map((line, i) => (
-              <line
-                key={i}
-                x1={line.x1} y1={line.y1} x2={line.x2} y2={line.y2}
-                stroke={line.color} strokeWidth="2" strokeDasharray="8 5"
-                strokeLinecap="round" opacity="0.75"
-                markerEnd={`url(#arrow-${i})`}
-                className="delegation-dash-line"
-              />
-            ))}
-          </svg>
-        )}
+            </svg>
+          )}
+        </div>
       </div>
 
-      {/* Floating drag ghost */}
+      {/* Floating drag ghost (viewport-fixed, unaffected by board transform) */}
       {drag && (
         <div
           className="drag-ghost"
@@ -206,6 +352,28 @@ export function OfficeMap({ onAgentClick, onEmptyRoomClick, onEditAgent, onDelet
           <span className="drag-ghost-name">{drag.agent.name}</span>
         </div>
       )}
+
+      {/* Zoom controls */}
+      <div className="zoom-controls">
+        <button
+          className="zoom-btn"
+          onClick={() => applyZoomButton(1 / ZOOM_STEP)}
+          title="Zoom out"
+          aria-label="Zoom out"
+        >−</button>
+        <button
+          className="zoom-level"
+          onClick={resetView}
+          title="Reset view"
+          aria-label="Reset zoom to 100%"
+        >{Math.round(zoom * 100)}%</button>
+        <button
+          className="zoom-btn"
+          onClick={() => applyZoomButton(ZOOM_STEP)}
+          title="Zoom in"
+          aria-label="Zoom in"
+        >+</button>
+      </div>
     </div>
   );
 }

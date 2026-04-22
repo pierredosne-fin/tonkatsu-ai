@@ -257,14 +257,26 @@ html, body, #root {
 /* ── Office Map ───────────────────────────────── */
 .office-map {
   flex: 1;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 24px;
-  overflow: auto;
+  overflow: hidden;
+  position: relative;
   background: var(--bg);
   background-image: radial-gradient(circle at 1px 1px, #1e293b 1px, transparent 0);
   background-size: 24px 24px;
+  cursor: grab;
+  user-select: none;
+}
+
+.office-map.is-panning {
+  cursor: grabbing;
+}
+
+.board-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+  padding: 24px;
 }
 
 .office-grid {
@@ -274,6 +286,47 @@ html, body, #root {
   gap: 14px;
   width: min(900px, 100%);
   position: relative;
+}
+
+/* ── Zoom controls ────────────────────────────────── */
+.zoom-controls {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2px;
+  z-index: 10;
+}
+
+.zoom-btn,
+.zoom-level {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 13px;
+  line-height: 1;
+  border-radius: calc(var(--radius) - 2px);
+  transition: background 0.15s;
+}
+
+.zoom-btn:hover,
+.zoom-level:hover {
+  background: var(--border);
+}
+
+.zoom-level {
+  min-width: 44px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  font-size: 12px;
 }
 
 .office-delegation-svg {

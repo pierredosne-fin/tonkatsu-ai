@@ -10,6 +10,7 @@ import { createSkillsRouter } from './routes/skills.js';
 import { createSshKeysRouter } from './routes/sshKeys.js';
 import { createWorkspaceSyncRouter } from './routes/workspaceSync.js';
 import { createFanOutRouter } from './routes/fanOut.js';
+import { createDetailRouter } from './routes/detail.js';
 import { READ_ONLY } from './config.js';
 
 const DEV_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:5173'];
@@ -56,6 +57,7 @@ export function createApp(): AppInstance {
   app.use('/api/ssh-keys', createSshKeysRouter());
   app.use('/api/workspace-sync', createWorkspaceSyncRouter(io));
   app.use('/api/fan-out', createFanOutRouter(io));
+  app.use('/api', createDetailRouter(io));
 
   return { app, httpServer, io };
 }
