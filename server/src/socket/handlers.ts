@@ -1,7 +1,23 @@
 import type { Server, Socket } from 'socket.io';
 import * as agentService from '../services/agentService.js';
+import * as roomService from '../services/roomService.js';
 import { runAgentTask } from '../services/claudeService.js';
 import { READ_ONLY } from '../config.js';
+import { writeAuditLog } from '../services/auditService.js';
+import { checkSocketRateLimit } from '../middleware/rateLimit.js';
+
+interface ZoomAuth {
+  userId?: string;
+  teamId?: string;
+}
+
+function resolveSocketUser(socket: Socket): ZoomAuth {
+  const auth = (socket.handshake.auth ?? {}) as Record<string, unknown>;
+  return {
+    userId: typeof auth['userId'] === 'string' ? auth['userId'] : 'anonymous',
+    teamId: typeof auth['teamId'] === 'string' ? auth['teamId'] : undefined,
+  };
+}
 
 export function registerHandlers(io: Server, socket: Socket): void {
   // Send full agent + team list on connect
@@ -76,27 +92,120 @@ export function registerHandlers(io: Server, socket: Socket): void {
       .catch((err) => console.error(`[socket] agent:resumeSession error for ${agentId}:`, err));
   });
 
-  // ── Zoom — scoped detail-level subscriptions ─────────────────────────────
-  // Socket.IO removes these room memberships automatically on disconnect,
-  // so no explicit cleanup is required.
+  // ── Zoom-in authorization gates ───────────────────────────────────────────
+  // Socket.IO removes room memberships automatically on disconnect.
 
-  /** Subscribe to detail events for a specific grid room. */
-  socket.on('room:zoom-in', ({ roomId }: { roomId: string }) => {
-    socket.join(`room:detail:${roomId}`);
-  });
-
-  /** Unsubscribe from detail events for a specific grid room. */
-  socket.on('room:zoom-out', ({ roomId }: { roomId: string }) => {
-    socket.leave(`room:detail:${roomId}`);
-  });
-
-  /** Subscribe to detail events (stream, toolCall, toolResult) for a specific agent. */
   socket.on('agent:zoom-in', ({ agentId }: { agentId: string }) => {
+    const { userId, teamId } = resolveSocketUser(socket);
+
+    if (!checkSocketRateLimit(socket.id)) {
+      socket.emit('zoom:error', {
+        error: 'Too many zoom requests',
+        code: 'RATE_LIMIT_EXCEEDED',
+        resourceType: 'agent',
+        resourceId: agentId,
+      });
+      return;
+    }
+
+    const agent = agentService.getAgent(agentId);
+    const exists = !!agent;
+    const allowed = exists && (teamId === undefined || agent!.teamId === teamId);
+
+    writeAuditLog({
+      timestamp: new Date().toISOString(),
+      event: 'agent:zoom-in',
+      userId: userId ?? 'anonymous',
+      resourceType: 'agent',
+      resourceId: agentId,
+      teamId,
+      allowed,
+    });
+
+    if (!exists) {
+      socket.emit('zoom:error', {
+        error: 'Agent not found',
+        code: 'NOT_FOUND',
+        resourceType: 'agent',
+        resourceId: agentId,
+      });
+      return;
+    }
+
+    if (!allowed) {
+      socket.emit('zoom:error', {
+        error: 'You do not have access to this agent',
+        code: 'ZOOM_FORBIDDEN',
+        resourceType: 'agent',
+        resourceId: agentId,
+      });
+      return;
+    }
+
     socket.join(`agent:zoomed:${agentId}`);
+    socket.emit('agent:zoom-in:ok', { agent: agentService.toClientAgent(agent!) });
   });
 
-  /** Unsubscribe from detail events for a specific agent. */
   socket.on('agent:zoom-out', ({ agentId }: { agentId: string }) => {
     socket.leave(`agent:zoomed:${agentId}`);
+  });
+
+  socket.on('room:zoom-in', ({ roomId }: { roomId: string }) => {
+    const { userId, teamId } = resolveSocketUser(socket);
+
+    if (!checkSocketRateLimit(socket.id)) {
+      socket.emit('zoom:error', {
+        error: 'Too many zoom requests',
+        code: 'RATE_LIMIT_EXCEEDED',
+        resourceType: 'room',
+        resourceId: roomId,
+      });
+      return;
+    }
+
+    const room = roomService.getAllRooms().find((r) => r.id === roomId);
+    const exists = !!room;
+    let allowed = exists;
+    if (allowed && teamId !== undefined && room!.agentId) {
+      const occupant = agentService.getAgent(room!.agentId);
+      allowed = !occupant || occupant.teamId === teamId;
+    }
+
+    writeAuditLog({
+      timestamp: new Date().toISOString(),
+      event: 'room:zoom-in',
+      userId: userId ?? 'anonymous',
+      resourceType: 'room',
+      resourceId: roomId,
+      teamId,
+      allowed,
+    });
+
+    if (!exists) {
+      socket.emit('zoom:error', {
+        error: 'Room not found',
+        code: 'NOT_FOUND',
+        resourceType: 'room',
+        resourceId: roomId,
+      });
+      return;
+    }
+
+    if (!allowed) {
+      socket.emit('zoom:error', {
+        error: 'You do not have access to this room',
+        code: 'ZOOM_FORBIDDEN',
+        resourceType: 'room',
+        resourceId: roomId,
+      });
+      return;
+    }
+
+    socket.join(`room:detail:${roomId}`);
+    socket.emit('room:zoom-in:ok', { room });
+  });
+
+  socket.on('room:zoom-out', ({ roomId }: { roomId: string }) => {
+    socket.leave(`room:detail:${roomId}`);
   });
 }

@@ -7,8 +7,12 @@ import * as templateService from '../services/templateService.js';
 import { runAgentTask } from '../services/claudeService.js';
 import { deleteSchedulesForAgent } from '../services/cronService.js';
 import { syncAgentRepo, syncWorktreeFromBase } from '../services/gitService.js';
+import { createRateLimiter } from '../middleware/rateLimit.js';
+import { requireAgentZoomAccess, requireRoomZoomAccess } from '../middleware/zoom.js';
 import Anthropic from '@anthropic-ai/sdk';
 import type { Server } from 'socket.io';
+
+const zoomRateLimit = createRateLimiter(60, 60_000);
 
 export function createAgentRouter(io: Server) {
   const router = Router();
@@ -23,8 +27,7 @@ export function createAgentRouter(io: Server) {
     avatarColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
     teamId: z.string().optional(),
     repoUrl: z.string().min(1).optional(),
-    /** Alias for repoUrl — accepted so agent-spawning callers can use a consistent field name. */
-    gitRepo: z.string().min(1).optional(),
+    gitRepo: z.union([z.string().url(), z.literal('inherit')]).optional(),
     repoBranch: z.string().optional(),
     agentTemplateId: z.string().uuid().optional(),
     canCreateAgents: z.boolean().optional(),
@@ -45,8 +48,21 @@ export function createAgentRouter(io: Server) {
         return;
       }
 
-      // gitRepo is an alias for repoUrl; gitRepo takes precedence when both are supplied
-      let effectiveRepoUrl = result.data.gitRepo ?? result.data.repoUrl;
+      // Resolve gitRepo field: explicit URL or inherit from calling agent
+      let effectiveRepoUrl = result.data.repoUrl;
+      if (result.data.gitRepo) {
+        if (result.data.gitRepo === 'inherit') {
+          const creatorId = req.headers['x-agent-id'];
+          if (typeof creatorId === 'string' && creatorId) {
+            const creator = agentService.getAgent(creatorId);
+            if (creator?.repoUrl) effectiveRepoUrl = creator.repoUrl;
+          }
+        } else {
+          effectiveRepoUrl = result.data.gitRepo;
+        }
+      }
+
+      // Inherit template repoUrl if still unresolved
       if (!effectiveRepoUrl && result.data.agentTemplateId) {
         const tmpl = templateService.getAgentTemplate(result.data.agentTemplateId);
         if (tmpl?.repoUrl) effectiveRepoUrl = tmpl.repoUrl;
@@ -101,6 +117,14 @@ export function createAgentRouter(io: Server) {
       console.error('[agents] generate-mission error:', err);
       res.status(500).json({ error: 'Generation failed' });
     }
+  });
+
+  // ── Zoom-in detail endpoint ───────────────────────────────────────────────
+  // Rate-limited + access-gated. Emits audit log on every call.
+  router.get('/:id', zoomRateLimit, requireAgentZoomAccess, (req, res) => {
+    const agent = agentService.getAgent(req.params.id);
+    // requireAgentZoomAccess already verified existence, so agent is non-null here
+    res.json(agentService.toClientAgent(agent!));
   });
 
   router.post('/:id/trigger', (req, res) => {
@@ -522,8 +546,16 @@ export function createTeamsRouter(io: Server) {
 
 export function createRoomsRouter() {
   const router = Router();
+
   router.get('/', (_req, res) => {
     res.json(roomService.getAllRooms());
   });
+
+  // ── Zoom-in detail endpoint ───────────────────────────────────────────────
+  router.get('/:id', zoomRateLimit, requireRoomZoomAccess, (req, res) => {
+    const room = roomService.getAllRooms().find((r) => r.id === req.params.id);
+    res.json(room);
+  });
+
   return router;
 }
