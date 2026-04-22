@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { CronSchedule } from '../types';
+import { TTL_OPTIONS_WITH_NONE } from '../utils/ttl';
+import { relativeTime, expiresIn } from '../utils/time';
 
 interface Props {
   agentId: string;
@@ -7,20 +9,11 @@ interface Props {
   onClose: () => void;
 }
 
-function relativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-}
-
 export function ScheduleModal({ agentId, agentName, onClose }: Props) {
   const [schedules, setSchedules] = useState<CronSchedule[]>([]);
   const [newExpr, setNewExpr] = useState('');
   const [newMessage, setNewMessage] = useState('');
+  const [newTtlMs, setNewTtlMs] = useState<number | null>(60 * 60 * 1000);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -39,7 +32,12 @@ export function ScheduleModal({ agentId, agentName, onClose }: Props) {
       const res = await fetch('/api/schedules', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agentId, cronExpression: newExpr.trim(), message: newMessage.trim() }),
+        body: JSON.stringify({
+          agentId,
+          cronExpression: newExpr.trim(),
+          message: newMessage.trim(),
+          ...(newTtlMs !== null && { ttlMs: newTtlMs }),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -91,6 +89,11 @@ export function ScheduleModal({ agentId, agentName, onClose }: Props) {
                     <span className="schedule-message">{s.message}</span>
                   </div>
                   <div className="schedule-item-meta">
+                    {s.expiresAt && (
+                      <span className="schedule-last-fired" title={s.expiresAt}>
+                        {expiresIn(s.expiresAt)}
+                      </span>
+                    )}
                     {s.lastFiredAt && (
                       <span className="schedule-last-fired" title={s.lastFiredAt}>
                         Last: {relativeTime(s.lastFiredAt)}
@@ -136,6 +139,20 @@ export function ScheduleModal({ agentId, agentName, onClose }: Props) {
                 onChange={(e) => setNewMessage(e.target.value)}
                 required
               />
+            </div>
+            <div className="schedule-field">
+              <label className="schedule-hint">Expires after</label>
+              <select
+                value={newTtlMs ?? ''}
+                onChange={(e) => setNewTtlMs(e.target.value === '' ? null : Number(e.target.value))}
+                className="schedule-ttl-select"
+              >
+                {TTL_OPTIONS_WITH_NONE.map((opt) => (
+                  <option key={String(opt.ms)} value={opt.ms ?? ''}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
             </div>
             {error && <p className="schedule-error">{error}</p>}
             <button

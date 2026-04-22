@@ -80,6 +80,30 @@ export function createTemplatesRouter(io: Server) {
     catch { res.status(400).json({ error: 'Invalid JSON' }); }
   });
 
+  router.put('/agents/:id/files/soul-md', (req, res) => {
+    if (!templateService.getAgentTemplate(req.params.id)) { res.status(404).json({ error: 'Not found' }); return; }
+    const { content } = req.body;
+    if (typeof content !== 'string') { res.status(400).json({ error: 'content required' }); return; }
+    fileService.writeSoul(templateService.getAgentTemplateWorkspacePath(req.params.id), content);
+    res.json({ ok: true });
+  });
+
+  router.put('/agents/:id/files/ops-md', (req, res) => {
+    if (!templateService.getAgentTemplate(req.params.id)) { res.status(404).json({ error: 'Not found' }); return; }
+    const { content } = req.body;
+    if (typeof content !== 'string') { res.status(400).json({ error: 'content required' }); return; }
+    fileService.writeOps(templateService.getAgentTemplateWorkspacePath(req.params.id), content);
+    res.json({ ok: true });
+  });
+
+  router.put('/agents/:id/files/tools-md', (req, res) => {
+    if (!templateService.getAgentTemplate(req.params.id)) { res.status(404).json({ error: 'Not found' }); return; }
+    const { content } = req.body;
+    if (typeof content !== 'string') { res.status(400).json({ error: 'content required' }); return; }
+    fileService.writeTools(templateService.getAgentTemplateWorkspacePath(req.params.id), content);
+    res.json({ ok: true });
+  });
+
   router.put('/agents/:id/files/commands/:name(*)', (req, res) => {
     if (!templateService.getAgentTemplate(req.params.id)) { res.status(404).json({ error: 'Not found' }); return; }
     const { content } = req.body;
@@ -167,6 +191,47 @@ Write tailored, concise instructions that will make this agent highly effective 
       res.json({ content: block.text });
     } catch (err) {
       console.error('[templates] generate-claude-md error:', err);
+      res.status(500).json({ error: 'Generation failed' });
+    }
+  });
+
+  router.post('/agents/:id/generate-workspace-file', async (req, res) => {
+    const t = templateService.getAgentTemplate(req.params.id);
+    if (!t) { res.status(404).json({ error: 'Not found' }); return; }
+    const { file, current } = req.body;
+    if (!['soul', 'ops', 'tools'].includes(file)) { res.status(400).json({ error: 'file must be soul | ops | tools' }); return; }
+    const prompts: Record<string, { system: string; generate: string; improve: string }> = {
+      soul: {
+        system: `You are an expert at writing SOUL.md files for AI agents. SOUL.md defines the agent's identity, core principles, and values. It answers "who is this agent?" — not what it does, but how it thinks, what it stands for, and its working philosophy. Be concise, specific, and inspiring. Return ONLY the SOUL.md content, no preamble, no markdown code fences.`,
+        generate: `Write a SOUL.md for an agent template named "${t.name}".\n\nMission: ${t.mission}\n\nDefine its identity, core principles, and values in a way that will guide all its decisions.`,
+        improve: `Improve this SOUL.md for an agent template named "${t.name}" with mission: "${t.mission}".\n\nCurrent SOUL.md:\n${current}\n\nMake it more specific, principled, and actionable. Keep what's good.`,
+      },
+      ops: {
+        system: `You are an expert at writing OPS.md files for AI agents. OPS.md is the operational playbook — recurring tasks, conventions, constraints, and workflows the agent must follow. It answers "how does this agent operate day-to-day?". Be concrete and specific. Return ONLY the OPS.md content, no preamble, no markdown code fences.`,
+        generate: `Write an OPS.md for an agent template named "${t.name}".\n\nMission: ${t.mission}\n\nDefine its recurring tasks, key conventions, constraints, and operational workflows.`,
+        improve: `Improve this OPS.md for an agent template named "${t.name}" with mission: "${t.mission}".\n\nCurrent OPS.md:\n${current}\n\nMake it more actionable and complete. Keep what's good.`,
+      },
+      tools: {
+        system: `You are an expert at writing TOOLS.md files for AI agents. TOOLS.md documents the tools, APIs, endpoints, and environment context available to the agent. It answers "what can this agent use and where?". Be precise and useful. Return ONLY the TOOLS.md content, no preamble, no markdown code fences.`,
+        generate: `Write a TOOLS.md for an agent template named "${t.name}".\n\nMission: ${t.mission}\n\nDocument the tools, APIs, and environment context this agent would typically have access to for its role.`,
+        improve: `Improve this TOOLS.md for an agent template named "${t.name}" with mission: "${t.mission}".\n\nCurrent TOOLS.md:\n${current}\n\nMake it more complete and precise. Keep what's good.`,
+      },
+    };
+    const p = prompts[file as string];
+    const isImproving = typeof current === 'string' && current.trim().length > 0;
+    try {
+      const client = new Anthropic();
+      const message = await client.messages.create({
+        model: 'claude-opus-4-6',
+        max_tokens: 2048,
+        system: p.system,
+        messages: [{ role: 'user', content: isImproving ? p.improve : p.generate }],
+      });
+      const block = message.content[0];
+      if (block.type !== 'text') throw new Error('Unexpected response');
+      res.json({ content: block.text });
+    } catch (err) {
+      console.error('[templates] generate-workspace-file error:', err);
       res.status(500).json({ error: 'Generation failed' });
     }
   });

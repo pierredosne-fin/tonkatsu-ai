@@ -3,6 +3,7 @@ import { join } from 'path';
 import { rmSync, existsSync, readdirSync, mkdirSync } from 'fs';
 import type { AgentTemplate, TeamTemplate } from '../models/types.js';
 import { loadTemplates, saveTemplates, WORKSPACES_DIR } from './persistenceService.js';
+import { setupTemplateFiles } from './fileService.js';
 
 export function getAgentTemplateWorkspacePath(templateId: string): string {
   return join(WORKSPACES_DIR, 'templates', templateId);
@@ -59,7 +60,7 @@ export function createAgentTemplate(params: {
   };
   agentTemplates.push(template);
   persist();
-  mkdirSync(getAgentTemplateWorkspacePath(template.id), { recursive: true });
+  setupTemplateFiles(getAgentTemplateWorkspacePath(template.id), template.name, template.mission);
   return template;
 }
 
@@ -129,13 +130,12 @@ export function syncTemplateFolders(): void {
   const templatesDir = join(WORKSPACES_DIR, 'templates');
   mkdirSync(templatesDir, { recursive: true });
 
-  // 1. Create missing folders for templates that don't have one
+  // 1. Create missing folders and initialize SOUL/OPS/TOOLS for templates that don't have them
   for (const t of agentTemplates) {
     const dir = getAgentTemplateWorkspacePath(t.id);
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
-      console.log(`[templates] Created missing folder for: ${t.name}`);
-    }
+    const isNew = !existsSync(dir);
+    setupTemplateFiles(dir, t.name, t.mission);
+    if (isNew) console.log(`[templates] Created missing folder for: ${t.name}`);
   }
 
   // 2. Remove folders that have no corresponding template entry

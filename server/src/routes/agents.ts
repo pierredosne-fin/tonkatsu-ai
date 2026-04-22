@@ -7,8 +7,12 @@ import * as templateService from '../services/templateService.js';
 import { runAgentTask } from '../services/claudeService.js';
 import { deleteSchedulesForAgent } from '../services/cronService.js';
 import { syncAgentRepo, syncWorktreeFromBase } from '../services/gitService.js';
+import { createRateLimiter } from '../middleware/rateLimit.js';
+import { requireAgentZoomAccess, requireRoomZoomAccess } from '../middleware/zoom.js';
 import Anthropic from '@anthropic-ai/sdk';
 import type { Server } from 'socket.io';
+
+const zoomRateLimit = createRateLimiter(60, 60_000);
 
 export function createAgentRouter(io: Server) {
   const router = Router();
@@ -23,51 +27,70 @@ export function createAgentRouter(io: Server) {
     avatarColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
     teamId: z.string().optional(),
     repoUrl: z.string().min(1).optional(),
+    gitRepo: z.union([z.string().url(), z.literal('inherit')]).optional(),
     repoBranch: z.string().optional(),
     agentTemplateId: z.string().uuid().optional(),
     canCreateAgents: z.boolean().optional(),
   });
 
-  router.post('/', (req, res) => {
-    const result = CreateSchema.safeParse(req.body);
-    if (!result.success) {
-      res.status(400).json({ error: result.error.flatten() });
-      return;
+  router.post('/', (req, res, next) => {
+    try {
+      const result = CreateSchema.safeParse(req.body);
+      if (!result.success) {
+        res.status(400).json({ error: result.error.flatten() });
+        return;
+      }
+
+      const teamId = result.data.teamId || 'default';
+
+      if (!roomService.hasVacantRoom(teamId)) {
+        res.status(409).json({ error: 'No vacant rooms available in this team' });
+        return;
+      }
+
+      // Resolve gitRepo field: explicit URL or inherit from calling agent
+      let effectiveRepoUrl = result.data.repoUrl;
+      if (result.data.gitRepo) {
+        if (result.data.gitRepo === 'inherit') {
+          const creatorId = req.headers['x-agent-id'];
+          if (typeof creatorId === 'string' && creatorId) {
+            const creator = agentService.getAgent(creatorId);
+            if (creator?.repoUrl) effectiveRepoUrl = creator.repoUrl;
+          }
+        } else {
+          effectiveRepoUrl = result.data.gitRepo;
+        }
+      }
+
+      // Inherit template repoUrl if still unresolved
+      if (!effectiveRepoUrl && result.data.agentTemplateId) {
+        const tmpl = templateService.getAgentTemplate(result.data.agentTemplateId);
+        if (tmpl?.repoUrl) effectiveRepoUrl = tmpl.repoUrl;
+      }
+
+      const agent = agentService.createAgent({ ...result.data, teamId, repoUrl: effectiveRepoUrl });
+      if (!agent) {
+        res.status(409).json({ error: effectiveRepoUrl ? 'Failed to set up agent workspace (git clone or worktree error)' : 'No vacant rooms available' });
+        return;
+      }
+
+      if (result.data.agentTemplateId) {
+        fileService.copyWorkspaceFiles(
+          templateService.getAgentTemplateWorkspacePath(result.data.agentTemplateId),
+          agent.workspacePath,
+        );
+        // copyWorkspaceFiles replaces .claude/ entirely — re-apply permissions that
+        // createAgent wrote to settings.json before the template copy.
+        fileService.setCreateAgentsPermission(agent.workspacePath, agent.canCreateAgents ?? false);
+      }
+
+      io.emit('agent:created', agentService.toClientAgent(agent));
+      io.emit('team:list', agentService.getTeamList());
+      res.status(201).json(agentService.toClientAgent(agent));
+    } catch (err) {
+      console.error('[POST /api/agents] Unexpected error:', err);
+      next(err);
     }
-
-    const teamId = result.data.teamId || 'default';
-
-    if (!roomService.hasVacantRoom(teamId)) {
-      res.status(409).json({ error: 'No vacant rooms available in this team' });
-      return;
-    }
-
-    // Inherit template repoUrl if user didn't override
-    let effectiveRepoUrl = result.data.repoUrl;
-    if (!effectiveRepoUrl && result.data.agentTemplateId) {
-      const tmpl = templateService.getAgentTemplate(result.data.agentTemplateId);
-      if (tmpl?.repoUrl) effectiveRepoUrl = tmpl.repoUrl;
-    }
-
-    const agent = agentService.createAgent({ ...result.data, teamId, repoUrl: effectiveRepoUrl });
-    if (!agent) {
-      res.status(409).json({ error: effectiveRepoUrl ? 'Failed to set up agent workspace (git clone or worktree error)' : 'No vacant rooms available' });
-      return;
-    }
-
-    if (result.data.agentTemplateId) {
-      fileService.copyWorkspaceFiles(
-        templateService.getAgentTemplateWorkspacePath(result.data.agentTemplateId),
-        agent.workspacePath,
-      );
-      // copyWorkspaceFiles replaces .claude/ entirely — re-apply permissions that
-      // createAgent wrote to settings.json before the template copy.
-      fileService.setCreateAgentsPermission(agent.workspacePath, agent.canCreateAgents ?? false);
-    }
-
-    io.emit('agent:created', agentService.toClientAgent(agent));
-    io.emit('team:list', agentService.getTeamList());
-    res.status(201).json(agentService.toClientAgent(agent));
   });
 
   router.post('/generate-mission', async (req, res) => {
@@ -94,6 +117,14 @@ export function createAgentRouter(io: Server) {
       console.error('[agents] generate-mission error:', err);
       res.status(500).json({ error: 'Generation failed' });
     }
+  });
+
+  // ── Zoom-in detail endpoint ───────────────────────────────────────────────
+  // Rate-limited + access-gated. Emits audit log on every call.
+  router.get('/:id', zoomRateLimit, requireAgentZoomAccess, (req, res) => {
+    const agent = agentService.getAgent(req.params.id);
+    // requireAgentZoomAccess already verified existence, so agent is non-null here
+    res.json(agentService.toClientAgent(agent!));
   });
 
   router.post('/:id/trigger', (req, res) => {
@@ -177,6 +208,33 @@ export function createAgentRouter(io: Server) {
     } catch {
       res.status(400).json({ error: 'Invalid JSON' });
     }
+  });
+
+  router.put('/:id/files/soul-md', (req, res) => {
+    const agent = agentService.getAgent(req.params.id);
+    if (!agent) { res.status(404).json({ error: 'Agent not found' }); return; }
+    const { content } = req.body;
+    if (typeof content !== 'string') { res.status(400).json({ error: 'content required' }); return; }
+    fileService.writeSoul(agent.workspacePath, content);
+    res.json({ ok: true });
+  });
+
+  router.put('/:id/files/ops-md', (req, res) => {
+    const agent = agentService.getAgent(req.params.id);
+    if (!agent) { res.status(404).json({ error: 'Agent not found' }); return; }
+    const { content } = req.body;
+    if (typeof content !== 'string') { res.status(400).json({ error: 'content required' }); return; }
+    fileService.writeOps(agent.workspacePath, content);
+    res.json({ ok: true });
+  });
+
+  router.put('/:id/files/tools-md', (req, res) => {
+    const agent = agentService.getAgent(req.params.id);
+    if (!agent) { res.status(404).json({ error: 'Agent not found' }); return; }
+    const { content } = req.body;
+    if (typeof content !== 'string') { res.status(400).json({ error: 'content required' }); return; }
+    fileService.writeTools(agent.workspacePath, content);
+    res.json({ ok: true });
   });
 
   // ── Permissions ────────────────────────────────────────────────────────────
@@ -342,6 +400,47 @@ Write tailored, concise instructions that will make this agent highly effective 
     }
   });
 
+  router.post('/:id/generate-workspace-file', async (req, res) => {
+    const agent = agentService.getAgent(req.params.id);
+    if (!agent) { res.status(404).json({ error: 'Agent not found' }); return; }
+    const { file, current } = req.body;
+    if (!['soul', 'ops', 'tools'].includes(file)) { res.status(400).json({ error: 'file must be soul | ops | tools' }); return; }
+    const prompts: Record<string, { system: string; generate: string; improve: string }> = {
+      soul: {
+        system: `You are an expert at writing SOUL.md files for AI agents. SOUL.md defines the agent's identity, core principles, and values. It answers "who is this agent?" — not what it does, but how it thinks, what it stands for, and its working philosophy. Be concise, specific, and inspiring. Return ONLY the SOUL.md content, no preamble, no markdown code fences.`,
+        generate: `Write a SOUL.md for an agent named "${agent.name}".\n\nMission: ${agent.mission}\n\nDefine its identity, core principles, and values in a way that will guide all its decisions.`,
+        improve: `Improve this SOUL.md for an agent named "${agent.name}" with mission: "${agent.mission}".\n\nCurrent SOUL.md:\n${current}\n\nMake it more specific, principled, and actionable. Keep what's good.`,
+      },
+      ops: {
+        system: `You are an expert at writing OPS.md files for AI agents. OPS.md is the operational playbook — recurring tasks, conventions, constraints, and workflows the agent must follow. It answers "how does this agent operate day-to-day?". Be concrete and specific. Return ONLY the OPS.md content, no preamble, no markdown code fences.`,
+        generate: `Write an OPS.md for an agent named "${agent.name}".\n\nMission: ${agent.mission}\n\nDefine its recurring tasks, key conventions, constraints, and operational workflows.`,
+        improve: `Improve this OPS.md for an agent named "${agent.name}" with mission: "${agent.mission}".\n\nCurrent OPS.md:\n${current}\n\nMake it more actionable and complete. Keep what's good.`,
+      },
+      tools: {
+        system: `You are an expert at writing TOOLS.md files for AI agents. TOOLS.md documents the tools, APIs, endpoints, and environment context available to the agent. It answers "what can this agent use and where?". Be precise and useful. Return ONLY the TOOLS.md content, no preamble, no markdown code fences.`,
+        generate: `Write a TOOLS.md for an agent named "${agent.name}".\n\nMission: ${agent.mission}\n\nDocument the tools, APIs, and environment context this agent would typically have access to for its role.`,
+        improve: `Improve this TOOLS.md for an agent named "${agent.name}" with mission: "${agent.mission}".\n\nCurrent TOOLS.md:\n${current}\n\nMake it more complete and precise. Keep what's good.`,
+      },
+    };
+    const p = prompts[file as string];
+    const isImproving = typeof current === 'string' && current.trim().length > 0;
+    try {
+      const client = new Anthropic();
+      const message = await client.messages.create({
+        model: 'claude-opus-4-6',
+        max_tokens: 2048,
+        system: p.system,
+        messages: [{ role: 'user', content: isImproving ? p.improve : p.generate }],
+      });
+      const block = message.content[0];
+      if (block.type !== 'text') throw new Error('Unexpected response');
+      res.json({ content: block.text });
+    } catch (err) {
+      console.error('[agents] generate-workspace-file error:', err);
+      res.status(500).json({ error: 'Generation failed' });
+    }
+  });
+
   router.post('/:id/sync', (req, res) => {
     const agent = agentService.getAgent(req.params.id);
     if (!agent) { res.status(404).json({ error: 'Agent not found' }); return; }
@@ -447,8 +546,16 @@ export function createTeamsRouter(io: Server) {
 
 export function createRoomsRouter() {
   const router = Router();
+
   router.get('/', (_req, res) => {
     res.json(roomService.getAllRooms());
   });
+
+  // ── Zoom-in detail endpoint ───────────────────────────────────────────────
+  router.get('/:id', zoomRateLimit, requireRoomZoomAccess, (req, res) => {
+    const room = roomService.getAllRooms().find((r) => r.id === req.params.id);
+    res.json(room);
+  });
+
   return router;
 }

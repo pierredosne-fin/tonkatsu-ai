@@ -7,8 +7,8 @@ export default {
   "title": "Tonkatsu",
   "tagline": "A virtual office for Claude Code agents",
   "favicon": "img/tonkatsu.png",
-  "url": "https://my-team.dev",
-  "baseUrl": "/",
+  "url": "https://pierredosne-fin.github.io",
+  "baseUrl": "/tonkatsu-ai/",
   "onBrokenLinks": "throw",
   "markdown": {
     "hooks": {
@@ -78,7 +78,7 @@ export default {
     },
     "footer": {
       "style": "dark",
-      "copyright": "Copyright © 2026 Tonkatsu. Built with Docusaurus.",
+      "copyright": "Copyright © 2026 Tonkatsu.",
       "links": []
     },
     "colorMode": {

@@ -3,139 +3,139 @@ import ComponentCreator from '@docusaurus/ComponentCreator';
 
 export default [
   {
-    path: '/__docusaurus/debug',
-    component: ComponentCreator('/__docusaurus/debug', '5ff'),
+    path: '/tonkatsu-ai/__docusaurus/debug',
+    component: ComponentCreator('/tonkatsu-ai/__docusaurus/debug', '86e'),
     exact: true
   },
   {
-    path: '/__docusaurus/debug/config',
-    component: ComponentCreator('/__docusaurus/debug/config', '5ba'),
+    path: '/tonkatsu-ai/__docusaurus/debug/config',
+    component: ComponentCreator('/tonkatsu-ai/__docusaurus/debug/config', '9ae'),
     exact: true
   },
   {
-    path: '/__docusaurus/debug/content',
-    component: ComponentCreator('/__docusaurus/debug/content', 'a2b'),
+    path: '/tonkatsu-ai/__docusaurus/debug/content',
+    component: ComponentCreator('/tonkatsu-ai/__docusaurus/debug/content', 'c8d'),
     exact: true
   },
   {
-    path: '/__docusaurus/debug/globalData',
-    component: ComponentCreator('/__docusaurus/debug/globalData', 'c3c'),
+    path: '/tonkatsu-ai/__docusaurus/debug/globalData',
+    component: ComponentCreator('/tonkatsu-ai/__docusaurus/debug/globalData', '14d'),
     exact: true
   },
   {
-    path: '/__docusaurus/debug/metadata',
-    component: ComponentCreator('/__docusaurus/debug/metadata', '156'),
+    path: '/tonkatsu-ai/__docusaurus/debug/metadata',
+    component: ComponentCreator('/tonkatsu-ai/__docusaurus/debug/metadata', '401'),
     exact: true
   },
   {
-    path: '/__docusaurus/debug/registry',
-    component: ComponentCreator('/__docusaurus/debug/registry', '88c'),
+    path: '/tonkatsu-ai/__docusaurus/debug/registry',
+    component: ComponentCreator('/tonkatsu-ai/__docusaurus/debug/registry', '29b'),
     exact: true
   },
   {
-    path: '/__docusaurus/debug/routes',
-    component: ComponentCreator('/__docusaurus/debug/routes', '000'),
+    path: '/tonkatsu-ai/__docusaurus/debug/routes',
+    component: ComponentCreator('/tonkatsu-ai/__docusaurus/debug/routes', 'ad4'),
     exact: true
   },
   {
-    path: '/docs',
-    component: ComponentCreator('/docs', '3d6'),
+    path: '/tonkatsu-ai/docs',
+    component: ComponentCreator('/tonkatsu-ai/docs', '3da'),
     routes: [
       {
-        path: '/docs',
-        component: ComponentCreator('/docs', '40d'),
+        path: '/tonkatsu-ai/docs',
+        component: ComponentCreator('/tonkatsu-ai/docs', 'd2d'),
         routes: [
           {
-            path: '/docs',
-            component: ComponentCreator('/docs', 'a6d'),
+            path: '/tonkatsu-ai/docs',
+            component: ComponentCreator('/tonkatsu-ai/docs', 'db6'),
             routes: [
               {
-                path: '/docs/api/rest-api',
-                component: ComponentCreator('/docs/api/rest-api', '183'),
+                path: '/tonkatsu-ai/docs/api/rest-api',
+                component: ComponentCreator('/tonkatsu-ai/docs/api/rest-api', 'b08'),
                 exact: true,
                 sidebar: "docs"
               },
               {
-                path: '/docs/api/socket-events',
-                component: ComponentCreator('/docs/api/socket-events', '8b2'),
+                path: '/tonkatsu-ai/docs/api/socket-events',
+                component: ComponentCreator('/tonkatsu-ai/docs/api/socket-events', '427'),
                 exact: true,
                 sidebar: "docs"
               },
               {
-                path: '/docs/architecture/agent-workspace',
-                component: ComponentCreator('/docs/architecture/agent-workspace', 'e49'),
+                path: '/tonkatsu-ai/docs/architecture/agent-workspace',
+                component: ComponentCreator('/tonkatsu-ai/docs/architecture/agent-workspace', 'c9b'),
                 exact: true,
                 sidebar: "docs"
               },
               {
-                path: '/docs/architecture/client',
-                component: ComponentCreator('/docs/architecture/client', '7f2'),
+                path: '/tonkatsu-ai/docs/architecture/client',
+                component: ComponentCreator('/tonkatsu-ai/docs/architecture/client', 'da3'),
                 exact: true,
                 sidebar: "docs"
               },
               {
-                path: '/docs/architecture/overview',
-                component: ComponentCreator('/docs/architecture/overview', '304'),
+                path: '/tonkatsu-ai/docs/architecture/overview',
+                component: ComponentCreator('/tonkatsu-ai/docs/architecture/overview', '468'),
                 exact: true,
                 sidebar: "docs"
               },
               {
-                path: '/docs/architecture/server',
-                component: ComponentCreator('/docs/architecture/server', '604'),
+                path: '/tonkatsu-ai/docs/architecture/server',
+                component: ComponentCreator('/tonkatsu-ai/docs/architecture/server', 'f42'),
                 exact: true,
                 sidebar: "docs"
               },
               {
-                path: '/docs/deployment',
-                component: ComponentCreator('/docs/deployment', '3c3'),
+                path: '/tonkatsu-ai/docs/deployment',
+                component: ComponentCreator('/tonkatsu-ai/docs/deployment', '7c5'),
                 exact: true,
                 sidebar: "docs"
               },
               {
-                path: '/docs/examples/first-agent',
-                component: ComponentCreator('/docs/examples/first-agent', '5a2'),
+                path: '/tonkatsu-ai/docs/examples/first-agent',
+                component: ComponentCreator('/tonkatsu-ai/docs/examples/first-agent', 'e4b'),
                 exact: true,
                 sidebar: "docs"
               },
               {
-                path: '/docs/examples/multi-agent-team',
-                component: ComponentCreator('/docs/examples/multi-agent-team', 'c6d'),
+                path: '/tonkatsu-ai/docs/examples/multi-agent-team',
+                component: ComponentCreator('/tonkatsu-ai/docs/examples/multi-agent-team', 'c1c'),
                 exact: true,
                 sidebar: "docs"
               },
               {
-                path: '/docs/examples/repo-backed-agent',
-                component: ComponentCreator('/docs/examples/repo-backed-agent', 'd4f'),
+                path: '/tonkatsu-ai/docs/examples/repo-backed-agent',
+                component: ComponentCreator('/tonkatsu-ai/docs/examples/repo-backed-agent', '3ca'),
                 exact: true,
                 sidebar: "docs"
               },
               {
-                path: '/docs/examples/scheduled-tasks',
-                component: ComponentCreator('/docs/examples/scheduled-tasks', 'd95'),
+                path: '/tonkatsu-ai/docs/examples/scheduled-tasks',
+                component: ComponentCreator('/tonkatsu-ai/docs/examples/scheduled-tasks', '3b9'),
                 exact: true,
                 sidebar: "docs"
               },
               {
-                path: '/docs/getting-started',
-                component: ComponentCreator('/docs/getting-started', '565'),
+                path: '/tonkatsu-ai/docs/getting-started',
+                component: ComponentCreator('/tonkatsu-ai/docs/getting-started', 'f3a'),
                 exact: true,
                 sidebar: "docs"
               },
               {
-                path: '/docs/intro',
-                component: ComponentCreator('/docs/intro', 'a6e'),
+                path: '/tonkatsu-ai/docs/intro',
+                component: ComponentCreator('/tonkatsu-ai/docs/intro', '857'),
                 exact: true,
                 sidebar: "docs"
               },
               {
-                path: '/docs/security',
-                component: ComponentCreator('/docs/security', 'e6a'),
+                path: '/tonkatsu-ai/docs/security',
+                component: ComponentCreator('/tonkatsu-ai/docs/security', '369'),
                 exact: true,
                 sidebar: "docs"
               },
               {
-                path: '/docs/troubleshooting',
-                component: ComponentCreator('/docs/troubleshooting', 'e35'),
+                path: '/tonkatsu-ai/docs/troubleshooting',
+                component: ComponentCreator('/tonkatsu-ai/docs/troubleshooting', '402'),
                 exact: true,
                 sidebar: "docs"
               }
@@ -146,8 +146,8 @@ export default [
     ]
   },
   {
-    path: '/',
-    component: ComponentCreator('/', 'e5f'),
+    path: '/tonkatsu-ai/',
+    component: ComponentCreator('/tonkatsu-ai/', 'f55'),
     exact: true
   },
   {
