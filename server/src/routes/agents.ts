@@ -7,8 +7,12 @@ import * as templateService from '../services/templateService.js';
 import { runAgentTask } from '../services/claudeService.js';
 import { deleteSchedulesForAgent } from '../services/cronService.js';
 import { syncAgentRepo, syncWorktreeFromBase } from '../services/gitService.js';
+import { createRateLimiter } from '../middleware/rateLimit.js';
+import { requireAgentZoomAccess, requireRoomZoomAccess } from '../middleware/zoom.js';
 import Anthropic from '@anthropic-ai/sdk';
 import type { Server } from 'socket.io';
+
+const zoomRateLimit = createRateLimiter(60, 60_000);
 
 export function createAgentRouter(io: Server) {
   const router = Router();
@@ -94,6 +98,14 @@ export function createAgentRouter(io: Server) {
       console.error('[agents] generate-mission error:', err);
       res.status(500).json({ error: 'Generation failed' });
     }
+  });
+
+  // ── Zoom-in detail endpoint ───────────────────────────────────────────────
+  // Rate-limited + access-gated. Emits audit log on every call.
+  router.get('/:id', zoomRateLimit, requireAgentZoomAccess, (req, res) => {
+    const agent = agentService.getAgent(req.params.id);
+    // requireAgentZoomAccess already verified existence, so agent is non-null here
+    res.json(agentService.toClientAgent(agent!));
   });
 
   router.post('/:id/trigger', (req, res) => {
@@ -447,8 +459,16 @@ export function createTeamsRouter(io: Server) {
 
 export function createRoomsRouter() {
   const router = Router();
+
   router.get('/', (_req, res) => {
     res.json(roomService.getAllRooms());
   });
+
+  // ── Zoom-in detail endpoint ───────────────────────────────────────────────
+  router.get('/:id', zoomRateLimit, requireRoomZoomAccess, (req, res) => {
+    const room = roomService.getAllRooms().find((r) => r.id === req.params.id);
+    res.json(room);
+  });
+
   return router;
 }
