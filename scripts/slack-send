@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "$#" -ne 2 ]; then
+  echo "Usage: slack-send <target> <message>" >&2
+  exit 1
+fi
+
+TARGET="$1"
+MESSAGE="$2"
+
+if [ -z "${SLACK_BOT_TOKEN:-}" ]; then
+  echo "Error: SLACK_BOT_TOKEN is not set" >&2
+  exit 1
+fi
+
+if [ -z "${SLACK_ALLOWED_TARGET:-}" ]; then
+  echo "Error: SLACK_ALLOWED_TARGET is not set" >&2
+  exit 1
+fi
+
+if [ "$TARGET" != "$SLACK_ALLOWED_TARGET" ]; then
+  echo "Error: target '$TARGET' is not allowed (expected '$SLACK_ALLOWED_TARGET')" >&2
+  exit 1
+fi
+
+RESPONSE=$(curl -s -X POST "https://slack.com/api/chat.postMessage" \
+  -H "Authorization: Bearer ${SLACK_BOT_TOKEN}" \
+  -H "Content-Type: application/json; charset=utf-8" \
+  --data "{\"channel\":\"${TARGET}\",\"text\":\"${MESSAGE}\"}")
+
+OK=$(echo "$RESPONSE" | grep -o '"ok":[^,}]*' | head -1 | cut -d: -f2 | tr -d ' ')
+
+if [ "$OK" != "true" ]; then
+  echo "Error: Slack API returned ok=false: $RESPONSE" >&2
+  exit 1
+fi
