@@ -10,6 +10,18 @@ import { emitThrottledStream, emitToZoomedRooms } from './zoomService.js';
 
 const NEED_INPUT_RE = /<NEED_INPUT>([\s\S]*?)<\/NEED_INPUT>/;
 const CALL_AGENT_RE = /<CALL_AGENT name="([^"]+)">([\s\S]*?)<\/CALL_AGENT>/;
+
+// Fallback: detect a question the agent forgot to wrap in <NEED_INPUT>.
+// Returns a RegExpExecArray-compatible tuple so callers can use match[1] uniformly.
+function detectTrailingQuestion(text: string): RegExpExecArray | null {
+  const trimmed = text.trimEnd();
+  if (!trimmed.endsWith('?')) return null;
+  // Extract the last sentence/line ending with '?'
+  const lastQ = trimmed.split(/\n/).filter(Boolean).at(-1)?.trim() ?? '';
+  if (!lastQ.endsWith('?')) return null;
+  const result = ['', lastQ] as unknown as RegExpExecArray;
+  return result;
+}
 const FAN_OUT_RE = /<FAN_OUT>([\s\S]*?)<\/FAN_OUT>/;
 // NOTE: TASK_RE is intentionally NOT a module-level constant with /g flag.
 // A module-level global regex retains lastIndex across calls, causing matchAll
@@ -59,6 +71,7 @@ After completing work: append key learnings to today's log and update MEMORY.md 
 IMPORTANT PROTOCOL:
 - If you need information or a decision from the user to proceed, end your final text response with:
   <NEED_INPUT>Your specific question here</NEED_INPUT>
+  CRITICAL: NEVER ask a question in plain text without wrapping it in <NEED_INPUT>. Any question directed at the user MUST use this tag — otherwise the user will not be notified and will never see it.
 - To delegate to another agent, end your final text response with:
   <CALL_AGENT name="AgentName">Your specific request</CALL_AGENT>
 - Otherwise, complete your work and end normally.${agentList}${createAgentInstructions}`;
@@ -424,8 +437,8 @@ export async function runAgentTask(
       return;
     }
 
-    // Check for user input request
-    const match = NEED_INPUT_RE.exec(finalText);
+    // Check for user input request — explicit tag or untagged trailing question
+    const match = NEED_INPUT_RE.exec(finalText) ?? detectTrailingQuestion(finalText);
     if (match) {
       const question = match[1].trim();
       agentService.setStatus(agentId, 'pending', question);
