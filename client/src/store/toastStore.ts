@@ -8,6 +8,7 @@ export interface Toast {
   avatarColor: string;
   status: AgentStatus;
   pendingQuestion?: string;
+  customMessage?: string;
 }
 
 interface ToastStore {

@@ -2,10 +2,11 @@ import { execFile } from 'child_process';
 import type { AgentStatus } from '../models/types.js';
 
 const STATUS_LABELS: Record<AgentStatus, string> = {
-  working:    '⚙️ Working…',
-  pending:    '❗ Needs your input',
-  sleeping:   '💤 Done',
-  delegating: '📨 Waiting for agent',
+  working:      '⚙️ Working…',
+  pending:      '❗ Needs your input',
+  sleeping:     '💤 Done',
+  delegating:   '📨 Waiting for agent',
+  broadcasting: '📡 Broadcasting fan-out',
 };
 
 export function notifyDesktop(agentName: string, status: AgentStatus, pendingQuestion?: string): void {

@@ -2,14 +2,15 @@ import { create } from 'zustand';
 import { io, Socket } from 'socket.io-client';
 import { useAgentStore } from './agentStore';
 import { useToastStore } from './toastStore';
-import type { Agent, AgentStatus, ConversationSession, FanOutProposal, Message, Team } from '../types';
+import type { Agent, AgentStatus, ConversationSession, FanOutDispatchedPayload, FanOutProposal, FanOutTaskCompletePayload, FanOutTaskStartedPayload, FanOutCompletePayload, Message, Team } from '../types';
 import { playPending, playSleeping, playWorking, playDelegating } from '../utils/sounds';
 
 const STATUS_LABELS: Record<AgentStatus, string> = {
-  working:    '⚙️ Working…',
-  pending:    '❗ Needs your input',
-  sleeping:   '💤 Done',
-  delegating: '📨 Waiting for agent',
+  working:      '⚙️ Working…',
+  pending:      '❗ Needs your input',
+  sleeping:     '💤 Done',
+  delegating:   '📨 Waiting for agent',
+  broadcasting: '📡 Broadcasting fan-out',
 };
 
 function notifyStatusChange(agentId: string, status: AgentStatus, pendingQuestion?: string) {
@@ -207,6 +208,45 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
 
     socket.on('agent:fanOutProposal', (proposal: FanOutProposal) => {
       useAgentStore.getState().setPendingFanOut(proposal);
+    });
+
+    // ── FanOut lifecycle events ─────────────────────────────────────────────
+
+    socket.on('fanout:dispatched', ({ fanoutId, sourceAgentId, tasks }: FanOutDispatchedPayload) => {
+      useAgentStore.getState().addFanOut({
+        fanoutId,
+        sourceAgentId,
+        tasks: tasks.map((t) => ({ ...t, status: 'queued' })),
+        startedAt: Date.now(),
+        settled: false,
+      });
+    });
+
+    socket.on('fanout:taskStarted', ({ fanoutId, taskId }: FanOutTaskStartedPayload) => {
+      useAgentStore.getState().updateFanOutTaskStatus(fanoutId, taskId, 'running');
+    });
+
+    socket.on('fanout:taskComplete', ({ fanoutId, taskId, status }: FanOutTaskCompletePayload) => {
+      useAgentStore.getState().updateFanOutTaskStatus(fanoutId, taskId, status, Date.now());
+    });
+
+    socket.on('fanout:complete', ({ fanoutId, sourceAgentId, results }: FanOutCompletePayload) => {
+      const store = useAgentStore.getState();
+      store.settleFanOut(fanoutId);
+
+      const total = results.length;
+      const done = results.filter((r) => r.status === 'done').length;
+      const failed = total - done;
+      const sourceAgent = store.agents.find((a) => a.id === sourceAgentId);
+      const name = sourceAgent?.name ?? 'Fan-out';
+
+      if (failed === 0) {
+        useToastStore.getState().push({ agentId: sourceAgentId, agentName: name, avatarColor: sourceAgent?.avatarColor ?? '#8b5cf6', status: 'sleeping', customMessage: `Fan-out complete — ${done}/${total} tasks done` });
+      } else if (done === 0) {
+        useToastStore.getState().push({ agentId: sourceAgentId, agentName: name, avatarColor: sourceAgent?.avatarColor ?? '#8b5cf6', status: 'sleeping', customMessage: `Fan-out failed — 0/${total} done` });
+      } else {
+        useToastStore.getState().push({ agentId: sourceAgentId, agentName: name, avatarColor: sourceAgent?.avatarColor ?? '#8b5cf6', status: 'sleeping', customMessage: `Fan-out partial — ${done}/${total} done, ${failed} failed` });
+      }
     });
 
     set({ socket });

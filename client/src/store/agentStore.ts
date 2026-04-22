@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Agent, AgentStatus, ConversationSession, FanOutProposal, Message, Team } from '../types';
+import type { Agent, AgentStatus, ConversationSession, FanOutProposal, FanOutState, FanOutTaskStatus, Message, Team } from '../types';
 
 export interface ToolEvent {
   type: 'call' | 'result';
@@ -33,6 +33,7 @@ interface AgentStore {
   agentHistories: Map<string, Message[]>;
   agentSessions: Map<string, ConversationSession[]>;
   pendingFanOut: FanOutProposal | null;
+  activeFanOuts: Map<string, FanOutState>; // keyed by fanoutId
 
   setAgents: (agents: Agent[]) => void;
   addAgent: (agent: Agent) => void;
@@ -57,6 +58,11 @@ interface AgentStore {
   clearDelegationEvents: (agentId: string) => void;
   setAgentSessions: (agentId: string, sessions: ConversationSession[]) => void;
   setPendingFanOut: (proposal: FanOutProposal | null) => void;
+  // FanOut tracking
+  addFanOut: (state: FanOutState) => void;
+  updateFanOutTaskStatus: (fanoutId: string, taskId: string, status: FanOutTaskStatus, completedAt?: number) => void;
+  settleFanOut: (fanoutId: string) => void;
+  dismissFanOut: (fanoutId: string) => void;
 }
 
 export const useAgentStore = create<AgentStore>((set) => ({
@@ -72,6 +78,7 @@ export const useAgentStore = create<AgentStore>((set) => ({
   agentHistories: new Map(),
   agentSessions: new Map(),
   pendingFanOut: null,
+  activeFanOuts: new Map(),
 
   setAgents: (agents) => set((s) => ({
     agents: [...agents].sort((a, b) => a.roomId.localeCompare(b.roomId)),
@@ -216,4 +223,43 @@ export const useAgentStore = create<AgentStore>((set) => ({
     }),
 
   setPendingFanOut: (proposal) => set({ pendingFanOut: proposal }),
+
+  addFanOut: (fanOut) =>
+    set((state) => {
+      const next = new Map(state.activeFanOuts);
+      next.set(fanOut.fanoutId, fanOut);
+      return { activeFanOuts: next };
+    }),
+
+  updateFanOutTaskStatus: (fanoutId, taskId, status, completedAt) =>
+    set((state) => {
+      const fanOut = state.activeFanOuts.get(fanoutId);
+      if (!fanOut) return {};
+      const next = new Map(state.activeFanOuts);
+      next.set(fanoutId, {
+        ...fanOut,
+        tasks: fanOut.tasks.map((t) =>
+          t.taskId === taskId
+            ? { ...t, status, ...(status === 'running' ? { startedAt: Date.now() } : {}), ...(completedAt ? { completedAt } : {}) }
+            : t
+        ),
+      });
+      return { activeFanOuts: next };
+    }),
+
+  settleFanOut: (fanoutId) =>
+    set((state) => {
+      const fanOut = state.activeFanOuts.get(fanoutId);
+      if (!fanOut) return {};
+      const next = new Map(state.activeFanOuts);
+      next.set(fanoutId, { ...fanOut, settled: true });
+      return { activeFanOuts: next };
+    }),
+
+  dismissFanOut: (fanoutId) =>
+    set((state) => {
+      const next = new Map(state.activeFanOuts);
+      next.delete(fanoutId);
+      return { activeFanOuts: next };
+    }),
 }));

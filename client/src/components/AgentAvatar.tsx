@@ -6,10 +6,11 @@ interface Props {
 }
 
 const STATUS_ICON: Record<Agent['status'], string> = {
-  sleeping:   '💤',
-  working:    '⚙️',
-  pending:    '❗',
-  delegating: '📨',
+  sleeping:     '💤',
+  working:      '⚙️',
+  pending:      '❗',
+  delegating:   '📨',
+  broadcasting: '📡',
 };
 
 export function AgentAvatar({ agent, onClick }: Props) {
