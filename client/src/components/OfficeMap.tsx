@@ -150,6 +150,9 @@ export function OfficeMap({ onAgentClick, onEmptyRoomClick, onEditAgent, onDelet
       return;
     }
     const gridRect = gridRef.current.getBoundingClientRect();
+    // Divide by zoom to convert screen-space deltas to SVG (grid) coordinates,
+    // matching the same correction applied in computeLines.
+    const z = zoomRef.current;
     const newFanLines: FanLine[] = [];
     const newHalos: HaloRect[] = [];
 
@@ -161,14 +164,14 @@ export function OfficeMap({ onAgentClick, onEmptyRoomClick, onEditAgent, onDelet
       const sourceEl = gridRef.current.querySelector<HTMLElement>(`[data-room-id="${sourceAgent.roomId}"]`);
       if (!sourceEl) continue;
       const sr = sourceEl.getBoundingClientRect();
-      const sx = sr.left - gridRect.left + sr.width / 2;
-      const sy = sr.top - gridRect.top + sr.height / 2;
+      const sx = (sr.left - gridRect.left + sr.width / 2) / z;
+      const sy = (sr.top - gridRect.top + sr.height / 2) / z;
 
       // Halo bounding box — starts with source room
-      let hLeft = sr.left - gridRect.left;
-      let hTop = sr.top - gridRect.top;
-      let hRight = sr.right - gridRect.left;
-      let hBottom = sr.bottom - gridRect.top;
+      let hLeft   = (sr.left   - gridRect.left) / z;
+      let hTop    = (sr.top    - gridRect.top)  / z;
+      let hRight  = (sr.right  - gridRect.left) / z;
+      let hBottom = (sr.bottom - gridRect.top)  / z;
 
       for (const task of fanOut.tasks) {
         // Skip completed (faded out) tasks' lines
@@ -179,8 +182,8 @@ export function OfficeMap({ onAgentClick, onEmptyRoomClick, onEditAgent, onDelet
         const targetEl = gridRef.current.querySelector<HTMLElement>(`[data-room-id="${targetAgent.roomId}"]`);
         if (!targetEl) continue;
         const tr = targetEl.getBoundingClientRect();
-        const tx = tr.left - gridRect.left + tr.width / 2;
-        const ty = tr.top - gridRect.top + tr.height / 2;
+        const tx = (tr.left - gridRect.left + tr.width / 2) / z;
+        const ty = (tr.top - gridRect.top + tr.height / 2) / z;
 
         newFanLines.push({
           x1: sx, y1: sy, x2: tx, y2: ty,
@@ -190,10 +193,10 @@ export function OfficeMap({ onAgentClick, onEmptyRoomClick, onEditAgent, onDelet
         });
 
         // Expand halo to include target room
-        hLeft   = Math.min(hLeft,   tr.left  - gridRect.left);
-        hTop    = Math.min(hTop,    tr.top   - gridRect.top);
-        hRight  = Math.max(hRight,  tr.right - gridRect.left);
-        hBottom = Math.max(hBottom, tr.bottom - gridRect.top);
+        hLeft   = Math.min(hLeft,   (tr.left   - gridRect.left) / z);
+        hTop    = Math.min(hTop,    (tr.top    - gridRect.top)  / z);
+        hRight  = Math.max(hRight,  (tr.right  - gridRect.left) / z);
+        hBottom = Math.max(hBottom, (tr.bottom - gridRect.top)  / z);
       }
 
       newHalos.push({ left: hLeft, top: hTop, right: hRight, bottom: hBottom });
