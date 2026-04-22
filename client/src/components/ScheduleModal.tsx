@@ -1,38 +1,12 @@
 import { useEffect, useState } from 'react';
 import type { CronSchedule } from '../types';
+import { TTL_OPTIONS_WITH_NONE } from '../utils/ttl';
+import { relativeTime, expiresIn } from '../utils/time';
 
 interface Props {
   agentId: string;
   agentName: string;
   onClose: () => void;
-}
-
-const TTL_OPTIONS = [
-  { label: 'No expiry', ms: null },
-  { label: '30 min',    ms: 30 * 60 * 1000 },
-  { label: '1 hour',    ms: 60 * 60 * 1000 },
-  { label: '4 hours',   ms: 4 * 60 * 60 * 1000 },
-  { label: '1 day',     ms: 24 * 60 * 60 * 1000 },
-];
-
-function relativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-}
-
-function expiresIn(iso: string): string {
-  const diff = new Date(iso).getTime() - Date.now();
-  if (diff <= 0) return 'expired';
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `expires in ${mins}m`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `expires in ${hrs}h`;
-  return `expires in ${Math.floor(hrs / 24)}d`;
 }
 
 export function ScheduleModal({ agentId, agentName, onClose }: Props) {
@@ -173,7 +147,7 @@ export function ScheduleModal({ agentId, agentName, onClose }: Props) {
                 onChange={(e) => setNewTtlMs(e.target.value === '' ? null : Number(e.target.value))}
                 className="schedule-ttl-select"
               >
-                {TTL_OPTIONS.map((opt) => (
+                {TTL_OPTIONS_WITH_NONE.map((opt) => (
                   <option key={String(opt.ms)} value={opt.ms ?? ''}>
                     {opt.label}
                   </option>

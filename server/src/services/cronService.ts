@@ -11,14 +11,19 @@ const tasks = new Map<string, cron.ScheduledTask>();
 
 const DEFAULT_TTL_MS = 60 * 60 * 1000; // 1 hour
 
+function isExpired(schedule: CronSchedule, now = Date.now()): boolean {
+  return schedule.expiresAt != null && new Date(schedule.expiresAt).getTime() <= now;
+}
+
 function registerCronJob(schedule: CronSchedule, io: Server): void {
   if (!cron.validate(schedule.cronExpression)) {
     console.warn(`[cronService] Invalid cron expression for schedule ${schedule.id}: "${schedule.cronExpression}"`);
     return;
   }
+  // Pre-parse expiry to avoid repeated Date construction on every tick
+  const expiresAtMs = schedule.expiresAt ? new Date(schedule.expiresAt).getTime() : null;
   const task = cron.schedule(schedule.cronExpression, () => {
-    // Auto-delete if TTL has passed
-    if (schedule.expiresAt && new Date() >= new Date(schedule.expiresAt)) {
+    if (expiresAtMs !== null && Date.now() >= expiresAtMs) {
       console.log(`[cronService] Schedule ${schedule.id} expired, removing`);
       deleteSchedule(schedule.id);
       return;
@@ -55,27 +60,27 @@ function stopTask(scheduleId: string): void {
 
 export function initSchedules(io: Server): void {
   const loaded = loadSchedules();
-  const now = new Date();
+  const now = Date.now();
   let skipped = 0;
   for (const s of loaded) {
-    if (s.expiresAt && new Date(s.expiresAt) <= now) {
-      skipped++;
-      continue; // discard expired schedules on startup
-    }
+    if (isExpired(s, now)) { skipped++; continue; }
     schedules.set(s.id, s);
     if (s.enabled) registerCronJob(s, io);
   }
-  if (skipped > 0) saveSchedules(Array.from(schedules.values()));
-  console.log(`[cronService] Loaded ${schedules.size} schedule(s), discarded ${skipped} expired`);
+  if (skipped > 0) {
+    saveSchedules(Array.from(schedules.values()));
+    console.log(`[cronService] Discarded ${skipped} expired schedule(s)`);
+  }
+  console.log(`[cronService] Loaded ${schedules.size} schedule(s)`);
 }
 
 export function reloadSchedules(io: Server): void {
   for (const [id] of tasks) stopTask(id);
   schedules.clear();
   const loaded = loadSchedules();
-  const now = new Date();
+  const now = Date.now();
   for (const s of loaded) {
-    if (s.expiresAt && new Date(s.expiresAt) <= now) continue;
+    if (isExpired(s, now)) continue;
     schedules.set(s.id, s);
     if (s.enabled) registerCronJob(s, io);
   }

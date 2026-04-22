@@ -1,18 +1,12 @@
 import { useState } from 'react';
 import { useAgentStore } from '../store/agentStore';
+import { TTL_OPTIONS } from '../utils/ttl';
 
 const CRON_OPTIONS = [
   { label: 'Every 5 min',  cron: '*/5 * * * *' },
   { label: 'Every 15 min', cron: '*/15 * * * *' },
   { label: 'Every 30 min', cron: '*/30 * * * *' },
   { label: 'Every hour',   cron: '0 * * * *' },
-];
-
-const TTL_OPTIONS = [
-  { label: '30 min',  ms: 30 * 60 * 1000 },
-  { label: '1 hour',  ms: 60 * 60 * 1000 },
-  { label: '4 hours', ms: 4 * 60 * 60 * 1000 },
-  { label: '1 day',   ms: 24 * 60 * 60 * 1000 },
 ];
 
 type Step = 'confirm' | 'cron';
