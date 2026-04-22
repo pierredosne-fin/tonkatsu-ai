@@ -299,21 +299,24 @@ export function OfficeMap({ onAgentClick, onEmptyRoomClick, onEditAgent, onDelet
         style={{ transform: `translate(${panX}px, ${panY}px) scale(${zoom})` }}
       >
         <div className="office-grid" ref={gridRef}>
-          {ROOMS.map((room) => (
-            <Room
-              key={room.id}
-              room={room}
-              agent={agentByRoom.get(room.id)}
-              onAgentClick={onAgentClick}
-              onEmptyRoomClick={!agentByRoom.get(room.id) && onEmptyRoomClick ? () => onEmptyRoomClick(room.id) : undefined}
-              isDragging={drag?.sourceRoomId === room.id}
-              isDropTarget={hoverRoomId === room.id && drag?.sourceRoomId !== room.id}
-              onMouseDown={(agent, e) => startDrag(agent, room.id, e)}
-              onRenameAgent={handleRenameAgent}
-              onEditAgent={onEditAgent}
-              onDeleteAgent={onDeleteAgent}
-            />
-          ))}
+          {ROOMS.map((room) => {
+            const agent = agentByRoom.get(room.id);
+            return (
+              <Room
+                key={room.id}
+                room={room}
+                agent={agent}
+                onAgentClick={onAgentClick}
+                onEmptyRoomClick={!agent && onEmptyRoomClick ? () => onEmptyRoomClick(room.id) : undefined}
+                isDragging={drag?.sourceRoomId === room.id}
+                isDropTarget={hoverRoomId === room.id && drag?.sourceRoomId !== room.id}
+                onMouseDown={(a, e) => startDrag(a, room.id, e)}
+                onRenameAgent={handleRenameAgent}
+                onEditAgent={onEditAgent}
+                onDeleteAgent={onDeleteAgent}
+              />
+            );
+          })}
 
           {hasSvgContent && (
             <svg className="office-delegation-svg" aria-hidden="true">
