@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto';
 import type { Server } from 'socket.io';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import * as agentService from './agentService.js';
-import { notifyDesktop } from './notifyService.js';
+import { notifyDesktop, notifySlack } from './notifyService.js';
 import type { FanOutProposal, FanOutTask } from '../models/types.js';
 import { emitThrottledStream, emitToZoomedRooms } from './zoomService.js';
 
@@ -431,6 +431,7 @@ export async function runAgentTask(
       agentService.setStatus(agentId, 'pending', question);
       io.emit('agent:statusChanged', { agentId, status: 'pending', pendingQuestion: question });
       notifyDesktop(agent.name, 'pending', question);
+      notifySlack(agent.name, agentId, question);
     } else {
       agentService.setStatus(agentId, 'sleeping');
       io.emit('agent:statusChanged', { agentId, status: 'sleeping' });

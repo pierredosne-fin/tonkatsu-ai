@@ -22,3 +22,6 @@ try {
 
 export const PORT = Number(process.env.PORT ?? 3001);
 export const READ_ONLY = process.env.READ_ONLY === 'true' || process.env.READ_ONLY === '1';
+export const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN ?? '';
+export const SLACK_CHANNEL_ID = process.env.SLACK_CHANNEL_ID ?? '';
+export const APP_URL = process.env.APP_URL ?? `http://localhost:${PORT}`;
