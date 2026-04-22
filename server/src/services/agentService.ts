@@ -430,10 +430,3 @@ export function newConversation(id: string): void {
   abortStream(id);
   clearSessionId(id);
 }
-
-export function findAgentByName(name: string, teamId: string): Agent | undefined {
-  const lower = name.toLowerCase();
-  return Array.from(agents.values()).find(
-    (a) => a.name.toLowerCase() === lower && a.teamId === teamId
-  );
-}
