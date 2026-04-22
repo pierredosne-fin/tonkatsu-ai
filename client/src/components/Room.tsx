@@ -143,6 +143,9 @@ export function Room({
       {agent?.status === 'delegating' && (
         <div className="room-delegating-badge">Waiting for agent</div>
       )}
+      {agent?.status === 'broadcasting' && (
+        <div className="room-broadcasting-badge">📡 Fan-out</div>
+      )}
     </div>
   );
 }

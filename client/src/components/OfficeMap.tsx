@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useAgentStore } from '../store/agentStore';
 import { useSocketStore } from '../store/socketStore';
 import { Room } from './Room';
+import { FanOutPanels } from './FanOutProgressPanel';
 import type { Agent, Room as RoomType } from '../types';
 
 const GRID_COLS = 5;
@@ -30,6 +31,21 @@ interface DelegationLine {
   color: string;
 }
 
+interface FanLine {
+  x1: number; y1: number;
+  x2: number; y2: number;
+  color: string;      // target agent's avatar color
+  taskId: string;
+  status: 'queued' | 'running' | 'done' | 'failed';
+}
+
+interface HaloRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
 interface DragState {
   agent: Agent;
   sourceRoomId: string;
@@ -48,6 +64,7 @@ export function OfficeMap({ onAgentClick, onEmptyRoomClick, onEditAgent, onDelet
   const agents = useAgentStore((s) => s.agents);
   const currentTeamId = useAgentStore((s) => s.currentTeamId);
   const activeDelegations = useAgentStore((s) => s.activeDelegations);
+  const activeFanOuts = useAgentStore((s) => s.activeFanOuts);
   const swapAgentRooms = useAgentStore((s) => s.swapAgentRooms);
   const moveAgentRoom = useSocketStore((s) => s.moveAgentRoom);
 
@@ -64,6 +81,8 @@ export function OfficeMap({ onAgentClick, onEmptyRoomClick, onEditAgent, onDelet
   const [drag, setDrag] = useState<DragState | null>(null);
   const [hoverRoomId, setHoverRoomId] = useState<string | null>(null);
   const [lines, setLines] = useState<DelegationLine[]>([]);
+  const [fanLines, setFanLines] = useState<FanLine[]>([]);
+  const [halos, setHalos] = useState<HaloRect[]>([]);
 
   const hoverRoomRef = useRef<string | null>(null);
   const agentByRoomRef = useRef<Map<string, Agent>>(new Map());
@@ -122,11 +141,78 @@ export function OfficeMap({ onAgentClick, onEmptyRoomClick, onEditAgent, onDelet
     setLines(result);
   }, [activeDelegations, teamAgents]);
 
+  // ── Fan lines + halo ──────────────────────────────────────────────────────
+
+  const computeFanLines = useCallback(() => {
+    if (!gridRef.current || activeFanOuts.size === 0) {
+      setFanLines([]);
+      setHalos([]);
+      return;
+    }
+    const gridRect = gridRef.current.getBoundingClientRect();
+    const newFanLines: FanLine[] = [];
+    const newHalos: HaloRect[] = [];
+
+    for (const fanOut of activeFanOuts.values()) {
+      if (fanOut.settled) continue;
+
+      const sourceAgent = teamAgents.find((a) => a.id === fanOut.sourceAgentId);
+      if (!sourceAgent) continue;
+      const sourceEl = gridRef.current.querySelector<HTMLElement>(`[data-room-id="${sourceAgent.roomId}"]`);
+      if (!sourceEl) continue;
+      const sr = sourceEl.getBoundingClientRect();
+      const sx = sr.left - gridRect.left + sr.width / 2;
+      const sy = sr.top - gridRect.top + sr.height / 2;
+
+      // Halo bounding box — starts with source room
+      let hLeft = sr.left - gridRect.left;
+      let hTop = sr.top - gridRect.top;
+      let hRight = sr.right - gridRect.left;
+      let hBottom = sr.bottom - gridRect.top;
+
+      for (const task of fanOut.tasks) {
+        // Skip completed (faded out) tasks' lines
+        if (task.status === 'done') continue;
+
+        const targetAgent = teamAgents.find((a) => a.id === task.targetAgentId);
+        if (!targetAgent) continue;
+        const targetEl = gridRef.current.querySelector<HTMLElement>(`[data-room-id="${targetAgent.roomId}"]`);
+        if (!targetEl) continue;
+        const tr = targetEl.getBoundingClientRect();
+        const tx = tr.left - gridRect.left + tr.width / 2;
+        const ty = tr.top - gridRect.top + tr.height / 2;
+
+        newFanLines.push({
+          x1: sx, y1: sy, x2: tx, y2: ty,
+          color: task.status === 'failed' ? '#ef4444' : targetAgent.avatarColor,
+          taskId: task.taskId,
+          status: task.status,
+        });
+
+        // Expand halo to include target room
+        hLeft   = Math.min(hLeft,   tr.left  - gridRect.left);
+        hTop    = Math.min(hTop,    tr.top   - gridRect.top);
+        hRight  = Math.max(hRight,  tr.right - gridRect.left);
+        hBottom = Math.max(hBottom, tr.bottom - gridRect.top);
+      }
+
+      newHalos.push({ left: hLeft, top: hTop, right: hRight, bottom: hBottom });
+    }
+
+    setFanLines(newFanLines);
+    setHalos(newHalos);
+  }, [activeFanOuts, teamAgents]);
+
   useEffect(() => { computeLines(); }, [computeLines]);
+  useEffect(() => { computeFanLines(); }, [computeFanLines]);
   useEffect(() => {
     window.addEventListener('resize', computeLines);
-    return () => window.removeEventListener('resize', computeLines);
-  }, [computeLines]);
+    window.addEventListener('resize', computeFanLines);
+    return () => {
+      window.removeEventListener('resize', computeLines);
+      window.removeEventListener('resize', computeFanLines);
+    };
+  }, [computeLines, computeFanLines]);
 
   // ── Card drag ─────────────────────────────────────────────────────────────
 
@@ -211,10 +297,8 @@ export function OfficeMap({ onAgentClick, onEmptyRoomClick, onEditAgent, onDelet
   // ── Pan (click-drag on background) ───────────────────────────────────────
 
   const onBoardMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    // Ignore if clicking inside a room card or zoom controls
     if ((e.target as Element).closest('[data-room-id]')) return;
     if ((e.target as Element).closest('.zoom-controls')) return;
-    // Ignore if a card drag is already active
     if (dragRef.current) return;
 
     e.preventDefault();
@@ -287,6 +371,8 @@ export function OfficeMap({ onAgentClick, onEmptyRoomClick, onEditAgent, onDelet
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  const hasSvgContent = lines.length > 0 || fanLines.length > 0 || halos.length > 0;
+
   return (
     <div
       className={`office-map${isPanning ? ' is-panning' : ''}`}
@@ -314,18 +400,39 @@ export function OfficeMap({ onAgentClick, onEmptyRoomClick, onEditAgent, onDelet
             />
           ))}
 
-          {lines.length > 0 && (
+          {hasSvgContent && (
             <svg className="office-delegation-svg" aria-hidden="true">
               <defs>
                 {lines.map((line, i) => (
-                  <marker key={i} id={`arrow-${i}`} markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                  <marker key={`dl-${i}`} id={`arrow-${i}`} markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
                     <path d="M0,0 L0,6 L6,3 z" fill={line.color} opacity="0.8" />
                   </marker>
                 ))}
+                {fanLines.map((fl, i) => (
+                  <marker key={`fl-${i}`} id={`fan-arrow-${i}`} markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                    <path d="M0,0 L0,6 L6,3 z" fill={fl.color} opacity="0.8" />
+                  </marker>
+                ))}
               </defs>
+
+              {/* Fan-out halos */}
+              {halos.map((h, i) => (
+                <rect
+                  key={`halo-${i}`}
+                  x={h.left - 8} y={h.top - 8}
+                  width={h.right - h.left + 16} height={h.bottom - h.top + 16}
+                  rx="12"
+                  fill="rgba(139,92,246,0.04)"
+                  stroke="rgba(139,92,246,0.2)"
+                  strokeWidth="1" strokeDasharray="4 3"
+                  className="fanout-halo"
+                />
+              ))}
+
+              {/* Delegation lines */}
               {lines.map((line, i) => (
                 <line
-                  key={i}
+                  key={`dl-${i}`}
                   x1={line.x1} y1={line.y1} x2={line.x2} y2={line.y2}
                   stroke={line.color} strokeWidth="2" strokeDasharray="8 5"
                   strokeLinecap="round" opacity="0.75"
@@ -333,10 +440,25 @@ export function OfficeMap({ onAgentClick, onEmptyRoomClick, onEditAgent, onDelet
                   className="delegation-dash-line"
                 />
               ))}
+
+              {/* Fan lines */}
+              {fanLines.map((fl, i) => (
+                <line
+                  key={`fl-${i}`}
+                  x1={fl.x1} y1={fl.y1} x2={fl.x2} y2={fl.y2}
+                  stroke={fl.color} strokeWidth="2" strokeDasharray="8 5"
+                  strokeLinecap="round"
+                  opacity={fl.status === 'failed' ? '0.9' : '0.75'}
+                  markerEnd={`url(#fan-arrow-${i})`}
+                  className={fl.status === 'failed' ? 'fanout-line--failed' : 'delegation-dash-line'}
+                />
+              ))}
             </svg>
           )}
+
+          {/* Fan-out progress panels anchored below dispatching rooms */}
+          <FanOutPanels gridRef={gridRef} onAgentClick={onAgentClick} />
         </div>
-      </div>
 
       {/* Floating drag ghost (viewport-fixed, unaffected by board transform) */}
       {drag && (

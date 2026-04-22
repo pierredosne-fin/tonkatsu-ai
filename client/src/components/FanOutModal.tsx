@@ -19,6 +19,7 @@ export function FanOutModal() {
   const [step, setStep] = useState<Step>('confirm');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expandedTasks, setExpandedTasks] = useState<Set<number>>(new Set());
   const [selectedCron, setSelectedCron] = useState(CRON_OPTIONS[1].cron);
   const [selectedTtlMs, setSelectedTtlMs] = useState(TTL_OPTIONS[1].ms);
 
@@ -26,15 +27,20 @@ export function FanOutModal() {
 
   const fromAgent = agents.find((a) => a.id === proposal.fromAgentId);
 
+  const toggleExpanded = (i: number) => {
+    setExpandedTasks((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i); else next.add(i);
+      return next;
+    });
+  };
+
   const confirm = async () => {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch(`/api/fan-out/${proposal.id}/confirm`, { method: 'POST' });
-      if (!res.ok) {
-        setError('Dispatch failed — please try again.');
-        return;
-      }
+      if (!res.ok) { setError('Dispatch failed — please try again.'); return; }
       setStep('cron');
     } catch {
       setError('Network error — please try again.');
@@ -70,10 +76,7 @@ export function FanOutModal() {
           ttlMs: selectedTtlMs,
         }),
       });
-      if (!res.ok) {
-        setError('Failed to create schedule — please try again.');
-        return;
-      }
+      if (!res.ok) { setError('Failed to create schedule — please try again.'); return; }
       setPendingFanOut(null);
     } catch {
       setError('Network error — please try again.');
@@ -82,71 +85,49 @@ export function FanOutModal() {
     }
   };
 
+  // ── Cron scheduling step (post-dispatch) ─────────────────────────────────
   if (step === 'cron') {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-        <div className="bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl w-full max-w-md mx-4 p-6 space-y-4">
-          <div>
-            <h2 className="text-white font-semibold text-lg">Tasks dispatched</h2>
-            <p className="text-zinc-400 text-sm mt-1">
-              Would you like <span className="text-white">{fromAgent?.name ?? 'the agent'}</span> to
-              periodically check on progress?
+      <div className="fanout-overlay">
+        <div className="fanout-dialog">
+          <div className="fanout-dialog__header">
+            <div className="fanout-dialog__title">Tasks dispatched</div>
+            <p className="fanout-dialog__subtitle">
+              Would you like <strong>{fromAgent?.name ?? 'the agent'}</strong> to periodically check on progress?
             </p>
           </div>
 
-          <div>
-            <p className="text-zinc-500 text-xs mb-2">Check interval</p>
-            <div className="grid grid-cols-2 gap-2">
+          <div className="fanout-dialog__section">
+            <p className="fanout-dialog__section-label">Check interval</p>
+            <div className="fanout-dialog__grid fanout-dialog__grid--2">
               {CRON_OPTIONS.map((opt) => (
                 <button
                   key={opt.cron}
+                  className={`fanout-chip ${selectedCron === opt.cron ? 'fanout-chip--active' : ''}`}
                   onClick={() => setSelectedCron(opt.cron)}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition border ${
-                    selectedCron === opt.cron
-                      ? 'bg-indigo-600 border-indigo-500 text-white'
-                      : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
-                  }`}
-                >
-                  {opt.label}
-                </button>
+                >{opt.label}</button>
               ))}
             </div>
           </div>
 
-          <div>
-            <p className="text-zinc-500 text-xs mb-2">Stop after</p>
-            <div className="grid grid-cols-4 gap-2">
+          <div className="fanout-dialog__section">
+            <p className="fanout-dialog__section-label">Stop after</p>
+            <div className="fanout-dialog__grid fanout-dialog__grid--4">
               {TTL_OPTIONS.map((opt) => (
                 <button
                   key={opt.ms}
+                  className={`fanout-chip ${selectedTtlMs === opt.ms ? 'fanout-chip--active' : ''}`}
                   onClick={() => setSelectedTtlMs(opt.ms)}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition border ${
-                    selectedTtlMs === opt.ms
-                      ? 'bg-indigo-600 border-indigo-500 text-white'
-                      : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'
-                  }`}
-                >
-                  {opt.label}
-                </button>
+                >{opt.label}</button>
               ))}
             </div>
           </div>
 
-          {error && <p className="text-red-400 text-xs">{error}</p>}
+          {error && <p className="fanout-dialog__error">{error}</p>}
 
-          <div className="flex gap-3 pt-1">
-            <button
-              onClick={() => setPendingFanOut(null)}
-              disabled={loading}
-              className="flex-1 px-4 py-2 rounded-lg bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition text-sm font-medium"
-            >
-              Skip
-            </button>
-            <button
-              onClick={scheduleCron}
-              disabled={loading}
-              className="flex-1 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition text-sm font-medium disabled:opacity-50"
-            >
+          <div className="fanout-dialog__footer">
+            <button className="fanout-btn fanout-btn--ghost" onClick={() => setPendingFanOut(null)} disabled={loading}>Skip</button>
+            <button className="fanout-btn fanout-btn--primary" onClick={scheduleCron} disabled={loading}>
               {loading ? 'Scheduling…' : 'Set up cron'}
             </button>
           </div>
@@ -155,46 +136,76 @@ export function FanOutModal() {
     );
   }
 
+  // ── Confirmation step ─────────────────────────────────────────────────────
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl w-full max-w-md mx-4 p-6 space-y-4">
-        <div>
-          <h2 className="text-white font-semibold text-lg">Parallel task dispatch</h2>
-          <p className="text-zinc-400 text-sm mt-1">
-            <span className="text-white">{fromAgent?.name ?? 'An agent'}</span> wants to assign{' '}
-            {proposal.tasks.length} task{proposal.tasks.length !== 1 ? 's' : ''} in parallel.
-          </p>
+    <div className="fanout-overlay">
+      <div className="fanout-dialog">
+        {/* Header */}
+        <div className="fanout-dialog__header">
+          {fromAgent && (
+            <div
+              className="fanout-dialog__source-avatar"
+              style={{ background: fromAgent.avatarColor }}
+            >
+              {fromAgent.name[0].toUpperCase()}
+            </div>
+          )}
+          <div>
+            <div className="fanout-dialog__title">Dispatch parallel tasks?</div>
+            <p className="fanout-dialog__subtitle">
+              <strong>{fromAgent?.name ?? 'An agent'}</strong> wants to assign{' '}
+              {proposal.tasks.length} task{proposal.tasks.length !== 1 ? 's' : ''} in parallel.
+            </p>
+          </div>
         </div>
 
-        <ul className="space-y-2">
-          {proposal.tasks.map((task, i) => (
-            <li key={i} className="bg-zinc-800 rounded-lg px-4 py-3">
-              <div className="text-xs text-zinc-400 uppercase tracking-wide mb-1">{task.agent}</div>
-              <div className="text-zinc-200 text-sm line-clamp-2">{task.prompt}</div>
-            </li>
-          ))}
+        {/* Task list */}
+        <ul className="fanout-task-list">
+          {proposal.tasks.map((task, i) => {
+            const targetAgent = agents.find((a) => a.name.toLowerCase() === task.agent.toLowerCase());
+            const isBusy = targetAgent?.status === 'working' || targetAgent?.status === 'pending';
+            const isExpanded = expandedTasks.has(i);
+            const isLong = task.prompt.length > 120;
+
+            return (
+              <li key={i} className="fanout-task-card">
+                <div className="fanout-task-card__header">
+                  <div className="fanout-task-card__agent">
+                    {targetAgent && (
+                      <span
+                        className="fanout-task-card__avatar"
+                        style={{ background: targetAgent.avatarColor }}
+                      >
+                        {targetAgent.name[0].toUpperCase()}
+                      </span>
+                    )}
+                    <span className="fanout-task-card__agent-name">{task.agent}</span>
+                  </div>
+                  {isBusy && <span className="fanout-task-card__busy">⚠ busy</span>}
+                </div>
+                <p className={`fanout-task-card__prompt ${!isExpanded && isLong ? 'fanout-task-card__prompt--clamp' : ''}`}>
+                  {task.prompt}
+                </p>
+                {isLong && (
+                  <button className="fanout-task-card__expand" onClick={() => toggleExpanded(i)}>
+                    {isExpanded ? '▴ show less' : '▾ show more'}
+                  </button>
+                )}
+              </li>
+            );
+          })}
         </ul>
 
-        <p className="text-zinc-500 text-xs">
-          Agents will start immediately and work independently. You will not receive a combined result.
+        <p className="fanout-dialog__hint">
+          Agents will start immediately and work independently.
         </p>
 
-        {error && <p className="text-red-400 text-xs">{error}</p>}
+        {error && <p className="fanout-dialog__error">{error}</p>}
 
-        <div className="flex gap-3 pt-1">
-          <button
-            onClick={reject}
-            disabled={loading}
-            className="flex-1 px-4 py-2 rounded-lg bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition text-sm font-medium"
-          >
-            Reject
-          </button>
-          <button
-            onClick={confirm}
-            disabled={loading}
-            className="flex-1 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition text-sm font-medium disabled:opacity-50"
-          >
-            {loading ? 'Dispatching…' : `Dispatch ${proposal.tasks.length} tasks`}
+        <div className="fanout-dialog__footer">
+          <button className="fanout-btn fanout-btn--ghost" onClick={reject} disabled={loading}>Cancel</button>
+          <button className="fanout-btn fanout-btn--primary" onClick={confirm} disabled={loading}>
+            {loading ? 'Dispatching…' : `Dispatch ${proposal.tasks.length} tasks →`}
           </button>
         </div>
       </div>
