@@ -29,5 +29,5 @@ jobs:
       - name: Type-check & build (server)
         run: npm run build -w server
 
-      - name: Tests
-        run: echo "No test suite configured yet — skipping"
+      - name: Tests (server)
+        run: npm run test -w server

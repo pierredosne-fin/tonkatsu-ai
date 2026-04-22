@@ -259,11 +259,11 @@ html, body, #root {
   flex: 1;
   overflow: hidden;
   position: relative;
-  cursor: grab;
-  user-select: none;
   background: var(--bg);
   background-image: radial-gradient(circle at 1px 1px, #1e293b 1px, transparent 0);
   background-size: 24px 24px;
+  cursor: grab;
+  user-select: none;
 }
 
 .office-map.is-panning {
@@ -277,6 +277,15 @@ html, body, #root {
   transform-origin: 0 0;
   will-change: transform;
   padding: 24px;
+}
+
+.office-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: repeat(3, 160px);
+  gap: 14px;
+  width: min(900px, 100%);
+  position: relative;
 }
 
 /* ── Zoom controls ────────────────────────────────── */
@@ -318,15 +327,6 @@ html, body, #root {
   font-variant-numeric: tabular-nums;
   color: var(--text-dim);
   font-size: 12px;
-}
-
-.office-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  grid-template-rows: repeat(3, 160px);
-  gap: 14px;
-  width: min(900px, 100%);
-  position: relative;
 }
 
 .office-delegation-svg {
@@ -1994,7 +1994,6 @@ body.is-dragging * {
   50%       { box-shadow: 0 0 0 4px rgba(139,92,246,0.4), 0 4px 32px rgba(139,92,246,0.35); }
 }
 
-/* Change 3: dispatching agent 📡 icon moved to bottom-left */
 .room-broadcasting-badge {
   position: absolute;
   bottom: 8px;

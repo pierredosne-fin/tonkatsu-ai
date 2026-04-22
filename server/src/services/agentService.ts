@@ -416,6 +416,13 @@ export function setAgentSession(agentId: string, sessionId: string): void {
   persist();
 }
 
+export function findAgentByName(name: string, teamId: string): Agent | undefined {
+  const lower = name.toLowerCase();
+  return Array.from(agents.values()).find(
+    (a) => a.name.toLowerCase() === lower && a.teamId === teamId
+  );
+}
+
 // Start a new conversation — just clear the session ID; SDK creates a new session on next run
 export function newConversation(id: string): void {
   const agent = agents.get(id);

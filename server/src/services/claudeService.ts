@@ -6,6 +6,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
 import * as agentService from './agentService.js';
 import { notifyDesktop } from './notifyService.js';
 import type { FanOutProposal, FanOutTask } from '../models/types.js';
+import { emitThrottledStream, emitToZoomedRooms } from './zoomService.js';
 
 const NEED_INPUT_RE = /<NEED_INPUT>([\s\S]*?)<\/NEED_INPUT>/;
 const CALL_AGENT_RE = /<CALL_AGENT name="([^"]+)">([\s\S]*?)<\/CALL_AGENT>/;
@@ -134,11 +135,7 @@ async function runSDKQuery(
           }
         } else if (event.type === 'content_block_delta') {
           if (event.delta.type === 'text_delta') {
-            io.to(`agent:${agentId}`).emit('agent:stream', {
-              agentId,
-              chunk: event.delta.text,
-              done: false,
-            });
+            emitThrottledStream(io, agentId, event.delta.text, false);
           } else if (event.delta.type === 'input_json_delta' && pendingToolCall) {
             pendingToolCall.inputStr += event.delta.partial_json;
           }
@@ -147,7 +144,7 @@ async function runSDKQuery(
             try {
               const input = JSON.parse(pendingToolCall.inputStr || '{}') as Record<string, unknown>;
               toolNameById.set(pendingToolCall.id, pendingToolCall.name);
-              io.to(`agent:${agentId}`).emit('agent:toolCall', {
+              emitToZoomedRooms(io, agentId, 'agent:toolCall', {
                 agentId,
                 toolCallId: pendingToolCall.id,
                 tool: pendingToolCall.name,
@@ -187,7 +184,7 @@ async function runSDKQuery(
                     : '';
               const MAX_PREVIEW = 500;
               const preview = rawContent.length > MAX_PREVIEW ? rawContent.slice(0, MAX_PREVIEW) + '…' : rawContent;
-              io.to(`agent:${agentId}`).emit('agent:toolResult', {
+              emitToZoomedRooms(io, agentId, 'agent:toolResult', {
                 agentId,
                 toolCallId: tr.tool_use_id,
                 tool: toolNameById.get(tr.tool_use_id) ?? '',
@@ -200,7 +197,7 @@ async function runSDKQuery(
       }
 
       if (message.type === 'result') {
-        io.to(`agent:${agentId}`).emit('agent:stream', { agentId, chunk: '', done: true });
+        emitThrottledStream(io, agentId, '', true);
         if (message.subtype !== 'success') {
           const errors = (message as { errors?: string[] }).errors ?? [];
           const errorMsg = errors.join('; ');

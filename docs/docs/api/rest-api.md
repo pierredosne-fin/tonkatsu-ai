@@ -470,3 +470,123 @@ curl -X PUT http://localhost:3001/api/agents/agent_xyz789/files/claude-md \
   -H "Content-Type: application/json" \
   -d '{ "content": "# CLAUDE.md\n\nAgent-specific instructions here." }'
 ```
+
+---
+
+## Detail Views (Zoom)
+
+High-detail snapshots for the zoom-in view. Both endpoints support `limit` / `offset` query parameters for paginating conversation history.
+
+---
+
+### `GET /api/rooms/:id/detail`
+
+Full room snapshot — room grid position, the occupying agent (if any), and the agent's recent conversation messages.
+
+**Query parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `teamId` | string | `"default"` | Team that owns the room. Required for multi-team deployments because room IDs (`room-01` … `room-15`) repeat across teams. |
+| `limit` | integer | `20` | Max messages to return (1–100). |
+| `offset` | integer | `0` | Number of messages to skip. |
+
+```bash
+curl "http://localhost:3001/api/rooms/room-01/detail?teamId=default&limit=10&offset=0"
+```
+
+**Response** `200 OK`:
+```json
+{
+  "room": {
+    "id": "room-01",
+    "gridCol": 1,
+    "gridRow": 1,
+    "teamId": "default"
+  },
+  "agent": {
+    "id": "agent_xyz789",
+    "name": "assistant",
+    "mission": "You are a helpful assistant.",
+    "avatarColor": "#4f46e5",
+    "status": "sleeping",
+    "roomId": "room-01",
+    "teamId": "default",
+    "canCreateAgents": false,
+    "repoUrl": null,
+    "sessionId": "sess_abc...",
+    "pendingQuestion": null,
+    "lastActivity": "2024-01-15T10:05:00Z",
+    "createdAt": "2024-01-15T10:00:00Z"
+  },
+  "recentMessages": [
+    { "role": "user", "content": "Summarise the Q4 report." },
+    { "role": "assistant", "content": "Here is a summary…" }
+  ],
+  "pagination": {
+    "total": 42,
+    "limit": 10,
+    "offset": 0
+  }
+}
+```
+
+`agent` is `null` when the room is unoccupied. `recentMessages` is `[]` when the agent has no conversation history.
+
+---
+
+### `GET /api/agents/:id/detail`
+
+Full agent snapshot — metadata, workspace `MEMORY.md` content, paginated conversation history, and available SDK sessions.
+
+**Query parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `limit` | integer | `20` | Max history messages to return (1–100). |
+| `offset` | integer | `0` | Number of messages to skip. |
+
+```bash
+curl "http://localhost:3001/api/agents/agent_xyz789/detail?limit=20&offset=0"
+```
+
+**Response** `200 OK`:
+```json
+{
+  "agent": {
+    "id": "agent_xyz789",
+    "name": "assistant",
+    "mission": "You are a helpful assistant.",
+    "avatarColor": "#4f46e5",
+    "status": "working",
+    "roomId": "room-01",
+    "teamId": "default",
+    "canCreateAgents": false,
+    "repoUrl": null,
+    "sessionId": "sess_abc...",
+    "pendingQuestion": null,
+    "lastActivity": "2024-01-15T10:05:00Z",
+    "createdAt": "2024-01-15T10:00:00Z"
+  },
+  "memory": {
+    "content": "# Long-term Memory\n\nKey facts the agent has learned…"
+  },
+  "history": {
+    "messages": [
+      { "role": "user", "content": "Analyse the dataset." },
+      { "role": "assistant", "content": "I'll start by…" }
+    ],
+    "pagination": {
+      "total": 84,
+      "limit": 20,
+      "offset": 0
+    }
+  },
+  "sessions": [
+    { "sessionId": "sess_abc...", "createdAt": "2024-01-15T10:00:00Z" },
+    { "sessionId": "sess_def...", "createdAt": "2024-01-14T08:00:00Z" }
+  ]
+}
+```
+
+`memory.content` is `null` when no `MEMORY.md` exists in the agent's workspace. `sessions` lists all persisted SDK sessions for the agent's workspace directory.

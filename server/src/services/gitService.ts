@@ -46,11 +46,8 @@ export function createWorktree(repoPath: string, worktreePath: string, branch: s
         const excludePatterns = [
           '.mcp.json',
           '.claude/**',
-          'SOUL.md',
           'USER.md',
-          'OPS.md',
           'MEMORY.md',
-          'TOOLS.md',
           'memory/',
         ].join('\n') + '\n';
         const excludeFile = join(infoDir, 'exclude');

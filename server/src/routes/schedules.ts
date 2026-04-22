@@ -21,6 +21,7 @@ export function createSchedulesRouter(io: Server) {
     cronExpression: z.string().min(1),
     message: z.string().min(1),
     enabled: z.boolean().optional(),
+    ttlMs: z.number().int().positive().optional(),
   });
 
   router.post('/', (req, res) => {

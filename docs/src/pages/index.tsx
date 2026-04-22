@@ -1,13 +1,87 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import useBaseUrl from '@docusaurus/useBaseUrl';
 import Layout from '@theme/Layout';
 import styles from './index.module.css';
 
+function PixelSnow() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animId: number;
+    const PIXEL = 3;
+    const COUNT = 120;
+
+    type Flake = { x: number; y: number; speed: number; drift: number; opacity: number; size: number };
+
+    const resize = () => {
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+    };
+    resize();
+    window.addEventListener('resize', resize);
+
+    const isDark = () => document.documentElement.getAttribute('data-theme') === 'dark';
+
+    const flakes: Flake[] = Array.from({ length: COUNT }, () => ({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      speed: 0.3 + Math.random() * 0.7,
+      drift: (Math.random() - 0.5) * 0.4,
+      opacity: 0.15 + Math.random() * 0.45,
+      size: PIXEL * (0.5 + Math.random()),
+    }));
+
+    const draw = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const dark = isDark();
+
+      for (const f of flakes) {
+        ctx.globalAlpha = f.opacity;
+        ctx.fillStyle = dark ? '#c4b5fd' : '#7c3aed';
+        ctx.fillRect(
+          Math.round(f.x / PIXEL) * PIXEL,
+          Math.round(f.y / PIXEL) * PIXEL,
+          Math.ceil(f.size),
+          Math.ceil(f.size),
+        );
+
+        f.y += f.speed;
+        f.x += f.drift;
+
+        if (f.y > canvas.height + 4) {
+          f.y = -4;
+          f.x = Math.random() * canvas.width;
+        }
+        if (f.x < -4) f.x = canvas.width + 4;
+        if (f.x > canvas.width + 4) f.x = -4;
+      }
+
+      ctx.globalAlpha = 1;
+      animId = requestAnimationFrame(draw);
+    };
+
+    draw();
+
+    return () => {
+      cancelAnimationFrame(animId);
+      window.removeEventListener('resize', resize);
+    };
+  }, []);
+
+  return <canvas ref={canvasRef} className={styles.pixelSnow} aria-hidden />;
+}
+
 function Hero() {
   return (
     <section className={styles.hero}>
+      <PixelSnow />
       <div className={styles.heroInner}>
         <img src={useBaseUrl('/img/tonkatsu.png')} alt="Tonkatsu" className={styles.heroLogo} />
         <h1 className={styles.heroTitle}>

@@ -5,7 +5,7 @@
   "source": "@site/docs/getting-started.md",
   "sourceDirName": ".",
   "slug": "/getting-started",
-  "permalink": "/docs/getting-started",
+  "permalink": "/tonkatsu-ai/docs/getting-started",
   "draft": false,
   "unlisted": false,
   "tags": [],
@@ -19,10 +19,10 @@
   "sidebar": "docs",
   "previous": {
     "title": "Introduction",
-    "permalink": "/docs/intro"
+    "permalink": "/tonkatsu-ai/docs/intro"
   },
   "next": {
     "title": "Overview",
-    "permalink": "/docs/architecture/overview"
+    "permalink": "/tonkatsu-ai/docs/architecture/overview"
   }
 }

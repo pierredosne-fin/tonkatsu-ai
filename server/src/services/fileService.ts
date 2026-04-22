@@ -44,6 +44,9 @@ function listSkills(dir: string): { name: string; content: string }[] {
 
 export interface WorkspaceFiles {
   claudeMd: string | null;
+  soul: string | null;
+  ops: string | null;
+  tools: string | null;
   settings: string | null;
   commands: { name: string; content: string }[];
   rules: { name: string; content: string }[];
@@ -53,6 +56,9 @@ export interface WorkspaceFiles {
 export function readWorkspaceFiles(workspacePath: string): WorkspaceFiles {
   return {
     claudeMd: safeRead(join(workspacePath, 'CLAUDE.md')),
+    soul: safeRead(join(workspacePath, 'SOUL.md')),
+    ops: safeRead(join(workspacePath, 'OPS.md')),
+    tools: safeRead(join(workspacePath, 'TOOLS.md')),
     settings: safeRead(join(workspacePath, '.claude', 'settings.json')),
     commands: listMdFiles(join(workspacePath, '.claude', 'commands')),
     rules: listMdFiles(join(workspacePath, '.claude', 'rules')),
@@ -64,14 +70,39 @@ export function writeClaudeMd(workspacePath: string, content: string): void {
   safeWrite(join(workspacePath, 'CLAUDE.md'), content);
 }
 
+export function writeSoul(workspacePath: string, content: string): void {
+  safeWrite(join(workspacePath, 'SOUL.md'), content);
+}
+
+export function writeOps(workspacePath: string, content: string): void {
+  safeWrite(join(workspacePath, 'OPS.md'), content);
+}
+
+export function writeTools(workspacePath: string, content: string): void {
+  safeWrite(join(workspacePath, 'TOOLS.md'), content);
+}
+
 export function writeSettings(workspacePath: string, content: string): void {
   // Validate JSON
   JSON.parse(content);
   safeWrite(join(workspacePath, '.claude', 'settings.json'), content);
 }
 
-const CREATE_AGENTS_PERMISSION = 'Bash(curl -s -X POST http://localhost:3001/api/agents*)';
-
+/**
+ * All permissions automatically granted to any agent that has canCreateAgents=true.
+ * Covers spawning agents + reading and writing templates (required when assigning
+ * templates to child agents or saving new template configurations).
+ */
+export const CREATE_AGENTS_PERMISSIONS: readonly string[] = [
+  // agents:create
+  'Bash(curl -s -X POST http://localhost:3001/api/agents*)',
+  // templates:read
+  'Bash(curl -s http://localhost:3001/api/templates*)',
+  // templates:write (POST / PUT / PATCH)
+  'Bash(curl -s -X POST http://localhost:3001/api/templates*)',
+  'Bash(curl -s -X PUT http://localhost:3001/api/templates*)',
+  'Bash(curl -s -X PATCH http://localhost:3001/api/templates*)',
+] as const;
 
 export function setCreateAgentsPermission(workspacePath: string, enabled: boolean): void {
   const settingsPath = join(workspacePath, '.claude', 'settings.json');
@@ -84,15 +115,14 @@ export function setCreateAgentsPermission(workspacePath: string, enabled: boolea
   }
 
   const perms = settings.permissions as Record<string, unknown> | undefined ?? {};
-  const allow = Array.isArray(perms.allow) ? [...perms.allow as string[]] : [];
+  let allow = Array.isArray(perms.allow) ? [...perms.allow as string[]] : [];
 
   if (enabled) {
-    if (!allow.includes(CREATE_AGENTS_PERMISSION)) {
-      allow.push(CREATE_AGENTS_PERMISSION);
+    for (const perm of CREATE_AGENTS_PERMISSIONS) {
+      if (!allow.includes(perm)) allow.push(perm);
     }
   } else {
-    const idx = allow.indexOf(CREATE_AGENTS_PERMISSION);
-    if (idx !== -1) allow.splice(idx, 1);
+    allow = allow.filter((p) => !CREATE_AGENTS_PERMISSIONS.includes(p));
   }
 
   settings.permissions = { ...perms, allow };
@@ -186,13 +216,13 @@ function copyDir(srcDir: string, destDir: string): void {
   }
 }
 
-/** Copy template workspace files (CLAUDE.md + .claude/) to an agent workspace, replacing .claude/ entirely. */
+/** Copy template workspace files (CLAUDE.md + SOUL.md + OPS.md + TOOLS.md + .claude/) to an agent workspace, replacing .claude/ entirely. */
 export function copyWorkspaceFiles(srcPath: string, destPath: string): void {
   if (!existsSync(srcPath)) return;
-  const claudeMd = join(srcPath, 'CLAUDE.md');
-  if (existsSync(claudeMd)) {
-    mkdirSync(destPath, { recursive: true });
-    copyFileSync(claudeMd, join(destPath, 'CLAUDE.md'));
+  mkdirSync(destPath, { recursive: true });
+  for (const file of ['CLAUDE.md', 'SOUL.md', 'OPS.md', 'TOOLS.md']) {
+    const src = join(srcPath, file);
+    if (existsSync(src)) copyFileSync(src, join(destPath, file));
   }
   const claudeDir = join(srcPath, '.claude');
   if (existsSync(claudeDir)) {
@@ -205,14 +235,28 @@ export function copyWorkspaceFiles(srcPath: string, destPath: string): void {
 
 /** Copy an agent's workspace files into a template directory, overwriting everything. */
 export function snapshotWorkspace(agentPath: string, templatePath: string): void {
-  const claudeMd = join(agentPath, 'CLAUDE.md');
-  if (existsSync(claudeMd)) {
-    mkdirSync(templatePath, { recursive: true });
-    copyFileSync(claudeMd, join(templatePath, 'CLAUDE.md'));
+  mkdirSync(templatePath, { recursive: true });
+  for (const file of ['CLAUDE.md', 'SOUL.md', 'OPS.md', 'TOOLS.md']) {
+    const src = join(agentPath, file);
+    if (existsSync(src)) copyFileSync(src, join(templatePath, file));
   }
   const claudeDir = join(agentPath, '.claude');
   if (existsSync(claudeDir)) {
     copyDir(claudeDir, join(templatePath, '.claude'));
+  }
+}
+
+/** Initialize SOUL.md, OPS.md, TOOLS.md for a template workspace (only if absent). */
+export function setupTemplateFiles(workspacePath: string, name: string, mission: string): void {
+  mkdirSync(workspacePath, { recursive: true });
+  const files: Record<string, string> = {
+    'SOUL.md':  `# Soul\n\n**Name:** ${name}\n**Mission:** ${mission}\n\nCore principles and identity of this agent.\n`,
+    'OPS.md':   `# Operational Playbook\n\nRecurring tasks, conventions, constraints.\n`,
+    'TOOLS.md': `# Tools & Environment\n\nAvailable tools, API endpoints, credentials location.\n`,
+  };
+  for (const [filename, content] of Object.entries(files)) {
+    const p = join(workspacePath, filename);
+    if (!existsSync(p)) writeFileSync(p, content, 'utf-8');
   }
 }
 

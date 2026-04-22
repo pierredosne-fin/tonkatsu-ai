@@ -46,6 +46,17 @@ export function createFanOutRouter(io: Server): Router {
       return;
     }
 
+    // Emit fanout:dispatched immediately so the client can render the progress panel
+    io.emit('fanout:dispatched', {
+      fanoutId,
+      sourceAgentId: proposal.fromAgentId,
+      tasks: resolvedTasks.map(({ taskId, targetAgentId, taskSnippet }) => ({
+        taskId,
+        targetAgentId,
+        taskSnippet,
+      })),
+    });
+
     // Source agent enters broadcasting status while tasks run
     agentService.setStatus(proposal.fromAgentId, 'broadcasting');
     io.emit('agent:statusChanged', { agentId: proposal.fromAgentId, status: 'broadcasting' });
@@ -57,11 +68,14 @@ export function createFanOutRouter(io: Server): Router {
         const batch = resolvedTasks.slice(i, i + CONCURRENCY_LIMIT);
         await Promise.all(
           batch.map(async ({ taskId, targetAgentId, prompt }) => {
+            io.emit('fanout:taskStarted', { fanoutId, taskId, targetAgentId });
             try {
               await runAgentTask(targetAgentId, io, prompt);
+              io.emit('fanout:taskComplete', { fanoutId, taskId, targetAgentId, status: 'done' });
               results.push({ taskId, status: 'done' });
             } catch (err) {
               console.error(`[fan-out] task ${taskId} failed:`, err);
+              io.emit('fanout:taskComplete', { fanoutId, taskId, targetAgentId, status: 'failed' });
               results.push({ taskId, status: 'failed' });
             }
           })

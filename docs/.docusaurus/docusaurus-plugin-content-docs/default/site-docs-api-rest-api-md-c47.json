@@ -5,7 +5,7 @@
   "source": "@site/docs/api/rest-api.md",
   "sourceDirName": "api",
   "slug": "/api/rest-api",
-  "permalink": "/docs/api/rest-api",
+  "permalink": "/tonkatsu-ai/docs/api/rest-api",
   "draft": false,
   "unlisted": false,
   "tags": [],
@@ -19,10 +19,10 @@
   "sidebar": "docs",
   "previous": {
     "title": "Agent Workspace",
-    "permalink": "/docs/architecture/agent-workspace"
+    "permalink": "/tonkatsu-ai/docs/architecture/agent-workspace"
   },
   "next": {
     "title": "Socket.IO Events",
-    "permalink": "/docs/api/socket-events"
+    "permalink": "/tonkatsu-ai/docs/api/socket-events"
   }
 }

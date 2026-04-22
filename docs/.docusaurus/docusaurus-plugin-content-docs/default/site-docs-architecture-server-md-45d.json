@@ -5,7 +5,7 @@
   "source": "@site/docs/architecture/server.md",
   "sourceDirName": "architecture",
   "slug": "/architecture/server",
-  "permalink": "/docs/architecture/server",
+  "permalink": "/tonkatsu-ai/docs/architecture/server",
   "draft": false,
   "unlisted": false,
   "tags": [],
@@ -19,10 +19,10 @@
   "sidebar": "docs",
   "previous": {
     "title": "Overview",
-    "permalink": "/docs/architecture/overview"
+    "permalink": "/tonkatsu-ai/docs/architecture/overview"
   },
   "next": {
     "title": "Client",
-    "permalink": "/docs/architecture/client"
+    "permalink": "/tonkatsu-ai/docs/architecture/client"
   }
 }
