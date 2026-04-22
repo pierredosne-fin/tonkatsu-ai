@@ -395,7 +395,12 @@ export function CreateAgentModal({ onClose, onCreate, onEdit, initialName, teamI
                 />
                 <span>Can create agents</span>
               </label>
-              <span className="form-hint">Allows this agent to spawn new agents via the API</span>
+              <span className="form-hint">
+                Allows this agent to spawn new agents via the API.
+                {canCreateAgents && (
+                  <> Also auto-grants <code>templates:read</code> and <code>templates:write</code> so it can assign templates to the agents it creates.</>
+                )}
+              </span>
             </div>
             <div className="modal-footer">
               <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>

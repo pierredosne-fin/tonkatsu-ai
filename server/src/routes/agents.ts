@@ -23,6 +23,8 @@ export function createAgentRouter(io: Server) {
     avatarColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
     teamId: z.string().optional(),
     repoUrl: z.string().min(1).optional(),
+    /** Alias for repoUrl — accepted so agent-spawning callers can use a consistent field name. */
+    gitRepo: z.string().min(1).optional(),
     repoBranch: z.string().optional(),
     agentTemplateId: z.string().uuid().optional(),
     canCreateAgents: z.boolean().optional(),
@@ -43,8 +45,8 @@ export function createAgentRouter(io: Server) {
         return;
       }
 
-      // Inherit template repoUrl if user didn't override
-      let effectiveRepoUrl = result.data.repoUrl;
+      // gitRepo is an alias for repoUrl; gitRepo takes precedence when both are supplied
+      let effectiveRepoUrl = result.data.gitRepo ?? result.data.repoUrl;
       if (!effectiveRepoUrl && result.data.agentTemplateId) {
         const tmpl = templateService.getAgentTemplate(result.data.agentTemplateId);
         if (tmpl?.repoUrl) effectiveRepoUrl = tmpl.repoUrl;

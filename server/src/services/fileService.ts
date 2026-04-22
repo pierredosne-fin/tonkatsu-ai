@@ -88,11 +88,21 @@ export function writeSettings(workspacePath: string, content: string): void {
   safeWrite(join(workspacePath, '.claude', 'settings.json'), content);
 }
 
-const CREATE_AGENTS_PERMISSIONS = [
+/**
+ * All permissions automatically granted to any agent that has canCreateAgents=true.
+ * Covers spawning agents + reading and writing templates (required when assigning
+ * templates to child agents or saving new template configurations).
+ */
+export const CREATE_AGENTS_PERMISSIONS: readonly string[] = [
+  // agents:create
   'Bash(curl -s -X POST http://localhost:3001/api/agents*)',
-  'Bash(curl -s http://localhost:3001/api/templates/agents*)',
-];
-
+  // templates:read
+  'Bash(curl -s http://localhost:3001/api/templates*)',
+  // templates:write (POST / PUT / PATCH)
+  'Bash(curl -s -X POST http://localhost:3001/api/templates*)',
+  'Bash(curl -s -X PUT http://localhost:3001/api/templates*)',
+  'Bash(curl -s -X PATCH http://localhost:3001/api/templates*)',
+] as const;
 
 export function setCreateAgentsPermission(workspacePath: string, enabled: boolean): void {
   const settingsPath = join(workspacePath, '.claude', 'settings.json');
@@ -109,9 +119,7 @@ export function setCreateAgentsPermission(workspacePath: string, enabled: boolea
 
   if (enabled) {
     for (const perm of CREATE_AGENTS_PERMISSIONS) {
-      if (!allow.includes(perm)) {
-        allow.push(perm);
-      }
+      if (!allow.includes(perm)) allow.push(perm);
     }
   } else {
     allow = allow.filter((p) => !CREATE_AGENTS_PERMISSIONS.includes(p));
