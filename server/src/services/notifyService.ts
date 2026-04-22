@@ -1,6 +1,6 @@
 import { execFile } from 'child_process';
 import type { AgentStatus } from '../models/types.js';
-import { SLACK_BOT_TOKEN, SLACK_CHANNEL_ID, APP_URL } from '../config.js';
+import { SLACK_BOT_TOKEN, SLACK_CHANNEL_ID } from '../config.js';
 
 const STATUS_LABELS: Record<AgentStatus, string> = {
   working:    '⚙️ Working…',
@@ -25,7 +25,7 @@ export function notifyDesktop(agentName: string, status: AgentStatus, pendingQue
 export function notifySlack(agentName: string, agentId: string, question: string): void {
   if (!SLACK_BOT_TOKEN || !SLACK_CHANNEL_ID) return;
 
-  const deepLink = `${APP_URL}/#/agents/${agentId}`;
+  void agentId;
   const payload = {
     channel: SLACK_CHANNEL_ID,
     text: `*${agentName}* needs your input`,
@@ -36,16 +36,6 @@ export function notifySlack(agentName: string, agentId: string, question: string
           type: 'mrkdwn',
           text: `*${agentName}* — ❗ Needs your input\n\n${question}`,
         },
-      },
-      {
-        type: 'actions',
-        elements: [
-          {
-            type: 'button',
-            text: { type: 'plain_text', text: 'Open chat' },
-            url: deepLink,
-          },
-        ],
       },
     ],
   };

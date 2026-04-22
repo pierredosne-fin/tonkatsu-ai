@@ -19,8 +19,16 @@ if [ -z "${SLACK_ALLOWED_TARGET:-}" ]; then
   exit 1
 fi
 
-if [ "$TARGET" != "$SLACK_ALLOWED_TARGET" ]; then
-  echo "Error: target '$TARGET' is not allowed (expected '$SLACK_ALLOWED_TARGET')" >&2
+ALLOWED=false
+IFS=',' read -ra TARGETS <<< "$SLACK_ALLOWED_TARGET"
+for T in "${TARGETS[@]}"; do
+  if [ "${T// /}" = "$TARGET" ]; then
+    ALLOWED=true
+    break
+  fi
+done
+if [ "$ALLOWED" != "true" ]; then
+  echo "Error: target '$TARGET' is not in SLACK_ALLOWED_TARGET" >&2
   exit 1
 fi
 
