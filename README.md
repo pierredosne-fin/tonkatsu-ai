@@ -176,6 +176,84 @@ graph LR
 
 ---
 
+## Socket.IO events
+
+Tonkatsu uses Socket.IO for real-time communication. All events are on the default namespace (`/`).
+
+### Connection
+
+On connect the server immediately emits:
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `agent:list` | `ClientAgent[]` | Full agent roster |
+| `team:list` | `Team[]` | All teams |
+
+### Standard subscriptions (all connected clients)
+
+| Direction | Event | Payload | Description |
+|-----------|-------|---------|-------------|
+| C→S | `agent:subscribe` | `{ agentId }` | Join room `agent:{agentId}`; server sends back `agent:history` |
+| C→S | `agent:unsubscribe` | `{ agentId }` | Leave room `agent:{agentId}` |
+| S→C | `agent:history` | `{ agentId, history }` | Full conversation history (sent to room members) |
+| S→C | `agent:list` | `ClientAgent[]` | Broadcast when roster changes |
+| S→C | `team:list` | `Team[]` | Broadcast when team structure changes |
+| S→C | `agent:created` | `ClientAgent` | New agent spawned |
+| S→C | `agent:updated` | `Partial<ClientAgent>` | Agent properties changed |
+| S→C | `agent:deleted` | `{ agentId }` | Agent removed |
+| S→C | `agent:statusChanged` | `{ agentId, status, pendingQuestion? }` | Status transition |
+| S→C | `agent:message` | `{ agentId, message }` | Completed user or assistant message |
+| S→C | `agent:delegating` | `{ fromAgentId, toAgentId, toAgentName, message }` | Delegation started |
+| S→C | `agent:delegationComplete` | `{ fromAgentId, toAgentId, toAgentName, response }` | Delegation finished |
+| S→C | `agent:error` | `{ agentId, error }` | Agent error |
+| S→C | `agent:sessions` | `{ agentId, sessions }` | Available session list |
+| S→C | `workspace:synced` | `{ agentId }` | Workspace git sync completed |
+
+### Agent control
+
+| Direction | Event | Payload | Description |
+|-----------|-------|---------|-------------|
+| C→S | `agent:sendMessage` | `{ agentId, message }` | Send a user message to an agent |
+| C→S | `agent:sleep` | `{ agentId }` | Abort the current task and set status to sleeping |
+| C→S | `agent:newConversation` | `{ agentId }` | Clear conversation history |
+| C→S | `team:newConversation` | `{ teamId }` | Clear history for all team agents |
+| C→S | `agent:listSessions` | `{ agentId }` | Request available sessions |
+| C→S | `agent:resumeSession` | `{ agentId, sessionId }` | Restore a past session |
+| C→S | `agent:moveRoom` | `{ agentId, targetRoomId }` | Move agent to a different grid room |
+
+### Zoom — detail-level subscriptions
+
+Detail events (streaming tokens, tool calls, tool results) are **only** delivered to clients that have explicitly zoomed in. Non-zoomed clients never receive these high-frequency events.
+
+**Socket.IO room names:**
+- `agent:zoomed:{agentId}` — joined via `agent:zoom-in`
+- `room:detail:{roomId}` — joined via `room:zoom-in`
+
+Detail events are sent to **both** rooms so a client can zoom into either an agent or a grid room and receive the same stream.
+
+#### Zoom control events (Client → Server)
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `agent:zoom-in` | `{ agentId: string }` | Subscribe to detail events for an agent |
+| `agent:zoom-out` | `{ agentId: string }` | Unsubscribe from detail events for an agent |
+| `room:zoom-in` | `{ roomId: string }` | Subscribe to detail events for a grid room |
+| `room:zoom-out` | `{ roomId: string }` | Unsubscribe from detail events for a grid room |
+
+#### Detail events (Server → zoomed clients only)
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `agent:stream` | `{ agentId, chunk: string, done: boolean }` | Streaming token chunk. Chunks are batched (≤50 ms) before delivery. `done: true` signals end of stream. |
+| `agent:toolCall` | `{ agentId, toolCallId, tool, input }` | Tool invocation initiated by the agent |
+| `agent:toolResult` | `{ agentId, toolCallId, tool, result }` | Tool result returned to the agent (truncated to 500 chars) |
+
+#### Memory safety
+
+Socket.IO removes sockets from all rooms on disconnect. Throttle timers are keyed by `agentId` and cleared when the stream ends (`done: true`), so no timers outlive a task.
+
+---
+
 ## CI/CD
 
 | Workflow | Trigger | What it does |

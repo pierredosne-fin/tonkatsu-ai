@@ -120,3 +120,37 @@ export interface UserInputPayload {
   agentId: string;
   message: string;
 }
+
+// ── Zoom payload types ────────────────────────────────────────────────────────
+
+/** Client → Server: subscribe to detail events for a grid room. */
+export interface RoomZoomInPayload { roomId: string; }
+/** Client → Server: unsubscribe from detail events for a grid room. */
+export interface RoomZoomOutPayload { roomId: string; }
+/** Client → Server: subscribe to detail events for a specific agent. */
+export interface AgentZoomInPayload { agentId: string; }
+/** Client → Server: unsubscribe from detail events for a specific agent. */
+export interface AgentZoomOutPayload { agentId: string; }
+
+/** Server → Client (zoomed): streaming token chunk from a running agent. */
+export interface AgentStreamEvent {
+  agentId: string;
+  chunk: string;
+  done: boolean;
+}
+
+/** Server → Client (zoomed): tool call initiated by a running agent. */
+export interface AgentToolCallEvent {
+  agentId: string;
+  toolCallId: string;
+  tool: string;
+  input: Record<string, unknown>;
+}
+
+/** Server → Client (zoomed): tool result returned to a running agent. */
+export interface AgentToolResultEvent {
+  agentId: string;
+  toolCallId: string;
+  tool: string;
+  result: string;
+}

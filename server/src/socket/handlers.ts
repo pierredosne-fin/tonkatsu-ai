@@ -75,4 +75,28 @@ export function registerHandlers(io: Server, socket: Socket): void {
       .then((history) => io.to(`agent:${agentId}`).emit('agent:history', { agentId, history }))
       .catch((err) => console.error(`[socket] agent:resumeSession error for ${agentId}:`, err));
   });
+
+  // ── Zoom — scoped detail-level subscriptions ─────────────────────────────
+  // Socket.IO removes these room memberships automatically on disconnect,
+  // so no explicit cleanup is required.
+
+  /** Subscribe to detail events for a specific grid room. */
+  socket.on('room:zoom-in', ({ roomId }: { roomId: string }) => {
+    socket.join(`room:detail:${roomId}`);
+  });
+
+  /** Unsubscribe from detail events for a specific grid room. */
+  socket.on('room:zoom-out', ({ roomId }: { roomId: string }) => {
+    socket.leave(`room:detail:${roomId}`);
+  });
+
+  /** Subscribe to detail events (stream, toolCall, toolResult) for a specific agent. */
+  socket.on('agent:zoom-in', ({ agentId }: { agentId: string }) => {
+    socket.join(`agent:zoomed:${agentId}`);
+  });
+
+  /** Unsubscribe from detail events for a specific agent. */
+  socket.on('agent:zoom-out', ({ agentId }: { agentId: string }) => {
+    socket.leave(`agent:zoomed:${agentId}`);
+  });
 }
