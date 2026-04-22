@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAgentStore } from '../store/agentStore';
 import { TTL_OPTIONS } from '../utils/ttl';
 
@@ -22,6 +22,17 @@ export function FanOutModal() {
   const [expandedTasks, setExpandedTasks] = useState<Set<number>>(new Set());
   const [selectedCron, setSelectedCron] = useState(CRON_OPTIONS[1].cron);
   const [selectedTtlMs, setSelectedTtlMs] = useState(TTL_OPTIONS[1].ms);
+
+  // Reset step and transient state whenever a new proposal arrives.
+  // Without this, `step` stays 'cron' from the previous interaction and the
+  // confirmation dialog is skipped for subsequent FAN_OUT dispatches.
+  useEffect(() => {
+    if (proposal) {
+      setStep('confirm');
+      setError(null);
+      setExpandedTasks(new Set());
+    }
+  }, [proposal?.id]);
 
   if (!proposal) return null;
 
