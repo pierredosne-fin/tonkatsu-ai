@@ -33,8 +33,6 @@ export interface Agent {
   pendingQuestion?: string;
   lastActivity: string;
   createdAt: string;
-  officeId?: string;
-  role?: 'leader' | 'member';
 }
 
 export interface Room {
@@ -94,25 +92,6 @@ export interface ConversationSession {
   summary: string;
   lastModified: number;
   firstPrompt?: string;
-}
-
-export interface Office {
-  id: string;
-  teamId: string;
-  name: string;
-  groupId?: string;
-  position: { x: number; y: number };
-}
-
-export interface OfficeGroup {
-  id: string;
-  teamId: string;
-  name: string;
-}
-
-export interface OfficeLink {
-  fromOfficeId: string;
-  toOfficeId: string;
 }
 
 export interface FanOutTask {

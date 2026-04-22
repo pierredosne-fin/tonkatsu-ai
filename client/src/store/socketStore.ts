@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { io, Socket } from 'socket.io-client';
 import { useAgentStore } from './agentStore';
 import { useToastStore } from './toastStore';
-import type { Agent, AgentStatus, ConversationSession, FanOutProposal, Message, Office, OfficeGroup, OfficeLink, Team } from '../types';
+import type { Agent, AgentStatus, ConversationSession, FanOutProposal, Message, Team } from '../types';
 import { playPending, playSleeping, playWorking, playDelegating } from '../utils/sounds';
 
 const STATUS_LABELS: Record<AgentStatus, string> = {
@@ -47,21 +47,6 @@ export async function requestDesktopNotifications() {
   }
 }
 
-async function fetchOfficesForTeam(teamId: string): Promise<void> {
-  try {
-    const res = await fetch(`/api/offices?teamId=${encodeURIComponent(teamId)}`);
-    if (!res.ok) return;
-    const data = await res.json() as {
-      offices?: Office[];
-      officeGroups?: OfficeGroup[];
-      officeLinks?: OfficeLink[];
-    };
-    const store = useAgentStore.getState();
-    store.setOffices(data.offices ?? []);
-    store.setOfficeGroups(data.officeGroups ?? []);
-    store.setOfficeLinks(data.officeLinks ?? []);
-  } catch { /* network error — silently ignore */ }
-}
 
 interface SocketStore {
   socket: Socket | null;
@@ -89,11 +74,6 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
 
     socket.on('connect', () => {
       set({ connected: true });
-      // Fetch offices for the current team whenever (re)connected
-      const teamId = useAgentStore.getState().currentTeamId;
-      if (teamId) {
-        fetchOfficesForTeam(teamId).catch(() => { /* ignore */ });
-      }
     });
     socket.on('disconnect', () => set({ connected: false }));
 
@@ -227,27 +207,6 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
 
     socket.on('agent:fanOutProposal', (proposal: FanOutProposal) => {
       useAgentStore.getState().setPendingFanOut(proposal);
-    });
-
-    // Office events
-    socket.on('office:created', (office: Office) => {
-      useAgentStore.getState().addOffice(office);
-    });
-
-    socket.on('office:updated', (office: Office) => {
-      useAgentStore.getState().updateOffice(office);
-    });
-
-    socket.on('office:deleted', ({ id }: { id: string }) => {
-      useAgentStore.getState().removeOffice(id);
-    });
-
-    socket.on('office:linkCreated', (link: OfficeLink) => {
-      useAgentStore.getState().addOfficeLink(link);
-    });
-
-    socket.on('office:linkDeleted', ({ fromOfficeId, toOfficeId }: { fromOfficeId: string; toOfficeId: string }) => {
-      useAgentStore.getState().removeOfficeLink(fromOfficeId, toOfficeId);
     });
 
     set({ socket });

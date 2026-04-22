@@ -9,7 +9,6 @@ import { createSchedulesRouter } from './routes/schedules.js';
 import { createSkillsRouter } from './routes/skills.js';
 import { createSshKeysRouter } from './routes/sshKeys.js';
 import { createWorkspaceSyncRouter } from './routes/workspaceSync.js';
-import { createOfficesRouter } from './routes/offices.js';
 import { createFanOutRouter } from './routes/fanOut.js';
 import { READ_ONLY } from './config.js';
 
@@ -56,7 +55,6 @@ export function createApp(): AppInstance {
   app.use('/api/skills', createSkillsRouter());
   app.use('/api/ssh-keys', createSshKeysRouter());
   app.use('/api/workspace-sync', createWorkspaceSyncRouter(io));
-  app.use('/api/offices', createOfficesRouter(io));
   app.use('/api/fan-out', createFanOutRouter(io));
 
   return { app, httpServer, io };

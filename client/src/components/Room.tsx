@@ -2,14 +2,6 @@ import { useState, useRef, useEffect } from 'react';
 import type { Room as RoomType, Agent } from '../types';
 import { AgentAvatar } from './AgentAvatar';
 
-export interface ExtraAction {
-  key: string;
-  title: string;
-  label: string;
-  className?: string;
-  onClick: () => void;
-}
-
 interface Props {
   room: RoomType;
   agent?: Agent;
@@ -21,10 +13,6 @@ interface Props {
   onRenameAgent?: (agentId: string, name: string) => void;
   onEditAgent?: (agentId: string) => void;
   onDeleteAgent?: (agentId: string) => void;
-  /** Additional action buttons rendered in the room-actions tray. */
-  extraActions?: ExtraAction[];
-  /** When true, renders a crown badge on the agent avatar. */
-  leaderBadge?: boolean;
 }
 
 export function Room({
@@ -38,8 +26,6 @@ export function Room({
   onRenameAgent,
   onEditAgent,
   onDeleteAgent,
-  extraActions,
-  leaderBadge,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState('');
@@ -83,13 +69,6 @@ export function Room({
     .filter(Boolean)
     .join(' ');
 
-  const hasActions = agent && (onEditAgent || onDeleteAgent || (extraActions && extraActions.length > 0));
-
-  // Derive a human-readable label for the room slot
-  // Room IDs may be prefixed with an officeId like "office123:room-01"
-  const rawRoomSegment = room.id.includes(':') ? room.id.split(':').slice(1).join(':') : room.id;
-  const roomLabel = `Room ${rawRoomSegment.replace('room-', '')}`;
-
   return (
     <div
       className={classNames}
@@ -123,20 +102,16 @@ export function Room({
             </span>
           )
         ) : (
-          roomLabel
+          `Office ${room.id.replace('room-', '')}`
         )}
       </div>
       <div className="room-content">
         {agent ? (
           <div
             className="room-draggable"
-            style={{ position: 'relative' }}
             onMouseDown={(e) => onMouseDown(agent, e)}
           >
             <AgentAvatar agent={agent} onClick={() => onAgentClick(agent.id)} />
-            {leaderBadge && (
-              <span className="room-leader-crown" title="Leader">♛</span>
-            )}
           </div>
         ) : (
           <span className="room-vacant-text">
@@ -144,28 +119,20 @@ export function Room({
           </span>
         )}
       </div>
-      {hasActions && (
+      {agent && (onEditAgent || onDeleteAgent) && (
         <div className="room-actions">
-          {extraActions?.map((action) => (
-            <button
-              key={action.key}
-              className={['room-action-btn', action.className ?? ''].filter(Boolean).join(' ')}
-              title={action.title}
-              onClick={(e) => { e.stopPropagation(); action.onClick(); }}
-            >{action.label}</button>
-          ))}
           {onEditAgent && (
             <button
               className="room-action-btn"
               title="Edit agent"
-              onClick={(e) => { e.stopPropagation(); onEditAgent(agent!.id); }}
+              onClick={(e) => { e.stopPropagation(); onEditAgent(agent.id); }}
             >✎</button>
           )}
           {onDeleteAgent && (
             <button
               className="room-action-btn room-action-btn--danger"
               title="Delete agent"
-              onClick={(e) => { e.stopPropagation(); onDeleteAgent(agent!.id); }}
+              onClick={(e) => { e.stopPropagation(); onDeleteAgent(agent.id); }}
             >✕</button>
           )}
         </div>

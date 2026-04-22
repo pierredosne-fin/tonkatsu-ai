@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Agent, AgentStatus, ConversationSession, FanOutProposal, Message, Office, OfficeGroup, OfficeLink, Team } from '../types';
+import type { Agent, AgentStatus, ConversationSession, FanOutProposal, Message, Team } from '../types';
 
 export interface ToolEvent {
   type: 'call' | 'result';
@@ -32,9 +32,6 @@ interface AgentStore {
   toolCallCounters: Map<string, number>;
   agentHistories: Map<string, Message[]>;
   agentSessions: Map<string, ConversationSession[]>;
-  offices: Office[];
-  officeGroups: OfficeGroup[];
-  officeLinks: OfficeLink[];
   pendingFanOut: FanOutProposal | null;
 
   setAgents: (agents: Agent[]) => void;
@@ -43,14 +40,6 @@ interface AgentStore {
   updateAgent: (agent: Agent) => void;
   updateStatus: (agentId: string, status: AgentStatus, pendingQuestion?: string) => void;
   swapAgentRooms: (agentId1: string, agentId2: string | null, roomId1: string, roomId2: string) => void;
-  setOffices: (offices: Office[]) => void;
-  setOfficeGroups: (groups: OfficeGroup[]) => void;
-  setOfficeLinks: (links: OfficeLink[]) => void;
-  addOffice: (office: Office) => void;
-  removeOffice: (id: string) => void;
-  updateOffice: (office: Office) => void;
-  addOfficeLink: (link: OfficeLink) => void;
-  removeOfficeLink: (from: string, to: string) => void;
   appendStream: (agentId: string, chunk: string) => void;
   clearStream: (agentId: string) => void;
   selectAgent: (agentId: string | null) => void;
@@ -82,9 +71,6 @@ export const useAgentStore = create<AgentStore>((set) => ({
   toolCallCounters: new Map(),
   agentHistories: new Map(),
   agentSessions: new Map(),
-  offices: [],
-  officeGroups: [],
-  officeLinks: [],
   pendingFanOut: null,
 
   setAgents: (agents) => set((s) => ({
@@ -228,33 +214,6 @@ export const useAgentStore = create<AgentStore>((set) => ({
       next.set(agentId, sessions);
       return { agentSessions: next };
     }),
-
-  setOffices: (offices) => set({ offices }),
-
-  setOfficeGroups: (groups) => set({ officeGroups: groups }),
-
-  setOfficeLinks: (links) => set({ officeLinks: links }),
-
-  addOffice: (office) =>
-    set((state) => ({ offices: [...state.offices, office] })),
-
-  removeOffice: (id) =>
-    set((state) => ({ offices: state.offices.filter((o) => o.id !== id) })),
-
-  updateOffice: (office) =>
-    set((state) => ({
-      offices: state.offices.map((o) => (o.id === office.id ? office : o)),
-    })),
-
-  addOfficeLink: (link) =>
-    set((state) => ({ officeLinks: [...state.officeLinks, link] })),
-
-  removeOfficeLink: (from, to) =>
-    set((state) => ({
-      officeLinks: state.officeLinks.filter(
-        (l) => !(l.fromOfficeId === from && l.toOfficeId === to),
-      ),
-    })),
 
   setPendingFanOut: (proposal) => set({ pendingFanOut: proposal }),
 }));

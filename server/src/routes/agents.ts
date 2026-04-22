@@ -154,25 +154,6 @@ export function createAgentRouter(io: Server) {
     res.json(agentService.toClientAgent(updated));
   });
 
-  const RoleSchema = z.object({
-    role: z.enum(['leader', 'member']),
-  });
-
-  router.patch('/:id/role', (req, res) => {
-    const result = RoleSchema.safeParse(req.body);
-    if (!result.success) {
-      res.status(400).json({ error: result.error.flatten() });
-      return;
-    }
-    const updated = agentService.setAgentRole(req.params.id, result.data.role);
-    if (!updated) {
-      res.status(404).json({ error: 'Agent not found' });
-      return;
-    }
-    io.emit('agent:updated', agentService.toClientAgent(updated));
-    res.json(agentService.toClientAgent(updated));
-  });
-
   // ── Workspace Files ───────────────────────────────────────────────────────
 
   router.get('/:id/files', (req, res) => {

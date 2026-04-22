@@ -257,147 +257,16 @@ html, body, #root {
 /* ── Office Map ───────────────────────────────── */
 .office-map {
   flex: 1;
-  position: relative;
-  overflow: hidden;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 24px;
+  overflow: auto;
   background: var(--bg);
   background-image: radial-gradient(circle at 1px 1px, #1e293b 1px, transparent 0);
   background-size: 24px 24px;
-  cursor: default;
 }
 
-/* Zoomable/pannable canvas layer */
-.office-canvas {
-  position: absolute;
-  top: 0;
-  left: 0;
-}
-
-/* SVG overlay for link + delegation lines */
-.office-canvas-svg {
-  position: absolute;
-  top: 0;
-  left: 0;
-  pointer-events: none;
-  overflow: visible;
-}
-
-/* Individual office box */
-.office-box {
-  position: absolute;
-  background: var(--surface);
-  border: 2px solid var(--border);
-  border-radius: calc(var(--radius) + 2px);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.3);
-}
-
-.office-box-header {
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: var(--text-dim);
-  padding: 8px 14px;
-  background: var(--surface2);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-  user-select: none;
-}
-
-.office-box-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  grid-template-rows: repeat(3, 1fr);
-  gap: 10px;
-  flex: 1;
-  padding: 14px;
-}
-
-/* Zoom controls + Add Office button */
-.office-map-controls {
-  position: absolute;
-  bottom: 20px;
-  right: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  z-index: 10;
-}
-
-.office-map-control-btn {
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  color: var(--text-dim);
-  border-radius: var(--radius-sm);
-  width: 32px;
-  height: 32px;
-  font-size: 16px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  line-height: 1;
-  transition: background 0.15s, color 0.15s;
-}
-
-.office-map-control-btn:hover {
-  background: var(--surface3, var(--surface2));
-  color: var(--text);
-  border-color: var(--text-dim);
-}
-
-.office-map-add-office-btn {
-  width: auto;
-  padding: 0 10px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-  height: 28px;
-  color: var(--accent);
-  border-color: var(--accent);
-}
-
-.office-map-add-office-btn:hover {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
-}
-
-/* Leader crown badge on agent avatar */
-.room-leader-crown {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  font-size: 13px;
-  line-height: 1;
-  color: #f59e0b;
-  text-shadow: 0 1px 4px rgba(0,0,0,0.6);
-  pointer-events: none;
-  user-select: none;
-}
-
-/* Leader role button highlight */
-.room-action-btn--leader {
-  color: #f59e0b !important;
-  border-color: #f59e0b !important;
-}
-
-.room-action-btn--leader:hover {
-  background: #f59e0b !important;
-  color: #000 !important;
-}
-
-/* Pan cursor */
-body.is-panning,
-body.is-panning * {
-  cursor: grabbing !important;
-  user-select: none !important;
-}
-
-/* Legacy grid (kept for backward compat) */
 .office-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);

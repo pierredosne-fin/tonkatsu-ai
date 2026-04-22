@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { mkdirSync, rmSync, rmdirSync, existsSync, writeFileSync, renameSync } from 'fs';
 import { join, dirname } from 'path';
 import { setCreateAgentsPermission, setupWorkspaceStructure } from './fileService.js';
-import type { Agent, AgentStatus, GitSync, Message, Office, OfficeGroup, OfficeLink } from '../models/types.js';
+import type { Agent, AgentStatus, GitSync, Message } from '../models/types.js';
 import { assignRoom, freeRoom, swapRooms, resetAllRooms } from './roomService.js';
 import { createWorktree, removeWorktree, pruneWorktrees, cloneRepoIfNeeded, isGitRepo } from './gitService.js';
 import {
@@ -17,129 +17,14 @@ import {
   WORKSPACES_DIR,
   teamDisplayName,
   type PersistedAgent,
-  type LoadedTeamState,
 } from './persistenceService.js';
 
 const agents: Map<string, Agent> = new Map();
 const activeStreams: Map<string, AbortController> = new Map();
 
-// Office state: teamId → offices/groups/links
-const teamOffices: Map<string, Office[]> = new Map();
-const teamOfficeGroups: Map<string, OfficeGroup[]> = new Map();
-const teamOfficeLinks: Map<string, OfficeLink[]> = new Map();
-
 function persist() {
-  saveAgents(Array.from(agents.values()), teamOffices, teamOfficeGroups, teamOfficeLinks);
+  saveAgents(Array.from(agents.values()));
 }
-
-// ─── Office helpers ──────────────────────────────────────────────────────────
-
-export function getOfficesByTeam(teamId: string): Office[] {
-  return teamOffices.get(teamId) ?? [];
-}
-
-export function getOfficeGroupsByTeam(teamId: string): OfficeGroup[] {
-  return teamOfficeGroups.get(teamId) ?? [];
-}
-
-export function getOfficeLinksByTeam(teamId: string): OfficeLink[] {
-  return teamOfficeLinks.get(teamId) ?? [];
-}
-
-export function createOffice(params: { teamId: string; name: string; groupId?: string; position?: { x: number; y: number } }): Office {
-  const office: Office = {
-    id: uuidv4(),
-    teamId: params.teamId,
-    name: params.name,
-    groupId: params.groupId,
-    position: params.position ?? { x: 0, y: 0 },
-  };
-  const list = teamOffices.get(params.teamId) ?? [];
-  list.push(office);
-  teamOffices.set(params.teamId, list);
-  persist();
-  return office;
-}
-
-export function updateOffice(id: string, teamId: string, params: { name?: string; position?: { x: number; y: number } }): Office | null {
-  const list = teamOffices.get(teamId);
-  if (!list) return null;
-  const office = list.find((o) => o.id === id);
-  if (!office) return null;
-  if (params.name !== undefined) office.name = params.name;
-  if (params.position !== undefined) office.position = params.position;
-  persist();
-  return office;
-}
-
-export function deleteOffice(id: string, teamId: string): 'deleted' | 'not_found' | 'has_agents' {
-  const list = teamOffices.get(teamId);
-  if (!list) return 'not_found';
-  const idx = list.findIndex((o) => o.id === id);
-  if (idx === -1) return 'not_found';
-  const hasAgents = Array.from(agents.values()).some((a) => a.teamId === teamId && a.officeId === id);
-  if (hasAgents) return 'has_agents';
-  list.splice(idx, 1);
-  // Remove links referencing this office
-  const links = teamOfficeLinks.get(teamId);
-  if (links) {
-    const filtered = links.filter((l) => l.fromOfficeId !== id && l.toOfficeId !== id);
-    teamOfficeLinks.set(teamId, filtered);
-  }
-  persist();
-  return 'deleted';
-}
-
-export function createOfficeLink(teamId: string, fromOfficeId: string, toOfficeId: string): OfficeLink | null {
-  const offices = teamOffices.get(teamId) ?? [];
-  if (!offices.find((o) => o.id === fromOfficeId) || !offices.find((o) => o.id === toOfficeId)) return null;
-  const links = teamOfficeLinks.get(teamId) ?? [];
-  const already = links.find((l) => l.fromOfficeId === fromOfficeId && l.toOfficeId === toOfficeId);
-  if (already) return already;
-  const link: OfficeLink = { fromOfficeId, toOfficeId };
-  links.push(link);
-  teamOfficeLinks.set(teamId, links);
-  persist();
-  return link;
-}
-
-export function deleteOfficeLink(teamId: string, fromOfficeId: string, toOfficeId: string): boolean {
-  const links = teamOfficeLinks.get(teamId);
-  if (!links) return false;
-  const idx = links.findIndex((l) => l.fromOfficeId === fromOfficeId && l.toOfficeId === toOfficeId);
-  if (idx === -1) return false;
-  links.splice(idx, 1);
-  persist();
-  return true;
-}
-
-export function setAgentRole(id: string, role: 'leader' | 'member'): Agent | null {
-  const agent = agents.get(id);
-  if (!agent) return null;
-  agent.role = role;
-  persist();
-  return agent;
-}
-
-export function setAgentOffice(id: string, officeId: string): Agent | null {
-  const agent = agents.get(id);
-  if (!agent) return null;
-  agent.officeId = officeId;
-  persist();
-  return agent;
-}
-
-export function restoreTeamOfficeState(state: LoadedTeamState): void {
-  if (state.agents.length === 0 && state.offices.length === 0) return;
-  // Derive teamId from agents or offices
-  const teamId = state.agents[0]?.teamId ?? state.offices[0]?.teamId;
-  if (!teamId) return;
-  teamOffices.set(teamId, state.offices);
-  teamOfficeGroups.set(teamId, state.officeGroups);
-  teamOfficeLinks.set(teamId, state.officeLinks);
-}
-
-export { loadAllAgents };
 
 export function getAllAgents(): Agent[] {
   return Array.from(agents.values());
@@ -155,13 +40,6 @@ export function getAgent(id: string): Agent | undefined {
 
 export function getAgentsByTeam(teamId: string): Agent[] {
   return Array.from(agents.values()).filter((a) => a.teamId === teamId);
-}
-
-export function findAgentByName(name: string, teamId: string): Agent | undefined {
-  const lower = name.toLowerCase();
-  return Array.from(agents.values()).find(
-    (a) => a.name.toLowerCase() === lower && a.teamId === teamId
-  );
 }
 
 export function getTeamList(): { id: string; name: string }[] {
@@ -258,11 +136,6 @@ export function createAgent(params: {
     setupWorkspaceStructure(workspacePath, params.name, params.mission);
   }
 
-  // Ensure default office exists for the team
-  if (!(teamOffices.get(teamId) ?? []).length) {
-    teamOffices.set(teamId, [{ id: 'default', teamId, name: 'Main Office', position: { x: 0, y: 0 } }]);
-  }
-
   const agent: Agent = {
     id,
     name: params.name,
@@ -275,8 +148,6 @@ export function createAgent(params: {
     worktreeOf,
     repoUrl: repoUrl || undefined,
     canCreateAgents: params.canCreateAgents ?? false,
-    officeId: 'default',
-    role: 'member',
     lastActivity: new Date(),
     createdAt: new Date(),
   };
@@ -311,8 +182,6 @@ export function restoreAgent(persisted: PersistedAgent): Agent | null {
     sessionId: persisted.sessionId,
     canCreateAgents: persisted.canCreateAgents ?? false,
     gitSync: persisted.gitSync,
-    officeId: persisted.officeId ?? 'default',
-    role: persisted.role ?? 'member',
     lastActivity: new Date(persisted.lastActivity),
     createdAt: new Date(persisted.createdAt),
   };
@@ -355,7 +224,7 @@ export function restoreAgent(persisted: PersistedAgent): Agent | null {
   return agent;
 }
 
-export function updateAgent(id: string, params: { name?: string; mission?: string; avatarColor?: string; canCreateAgents?: boolean; gitSync?: GitSync | null; worktreeOf?: string; officeId?: string; role?: 'leader' | 'member' }): Agent | null {
+export function updateAgent(id: string, params: { name?: string; mission?: string; avatarColor?: string; canCreateAgents?: boolean; gitSync?: GitSync | null; worktreeOf?: string }): Agent | null {
   const agent = agents.get(id);
   if (!agent) return null;
   if (params.name !== undefined) agent.name = params.name;
@@ -370,12 +239,6 @@ export function updateAgent(id: string, params: { name?: string; mission?: strin
   }
   if (params.worktreeOf !== undefined) {
     agent.worktreeOf = params.worktreeOf;
-  }
-  if (params.officeId !== undefined) {
-    agent.officeId = params.officeId;
-  }
-  if (params.role !== undefined) {
-    agent.role = params.role;
   }
   persist();
   return agent;
@@ -432,18 +295,12 @@ export function hotReloadWorkspace(io: import('socket.io').Server): void {
 
   // Clear all in-memory state
   agents.clear();
-  teamOffices.clear();
-  teamOfficeGroups.clear();
-  teamOfficeLinks.clear();
   resetAllRooms();
 
   // Reload from disk
-  const states = loadAllAgents();
-  for (const state of states) {
-    restoreTeamOfficeState(state);
-    for (const p of state.agents) {
-      restoreAgent(p);
-    }
+  const persisted = loadAllAgents();
+  for (const p of persisted) {
+    restoreAgent(p);
   }
 
   // Push fresh state to all clients
@@ -557,6 +414,13 @@ export function setAgentSession(agentId: string, sessionId: string): void {
   if (!agent) return;
   agent.sessionId = sessionId;
   persist();
+}
+
+export function findAgentByName(name: string, teamId: string): Agent | undefined {
+  const lower = name.toLowerCase();
+  return Array.from(agents.values()).find(
+    (a) => a.name.toLowerCase() === lower && a.teamId === teamId
+  );
 }
 
 // Start a new conversation — just clear the session ID; SDK creates a new session on next run

@@ -276,14 +276,7 @@ async function runSubAgent(
 
   const othersForTarget = agentService
     .getAllAgents()
-    .filter((a) => {
-      if (a.id === target.id || a.id === callerAgentId || a.teamId !== target.teamId) return false;
-      if (target.role === 'leader') {
-        return a.role === 'leader' || a.officeId === target.officeId;
-      }
-      return a.officeId === target.officeId;
-    })
-    .filter((a, i, arr) => arr.findIndex((b) => b.id === a.id) === i)
+    .filter((a) => a.id !== target.id && a.id !== callerAgentId && a.teamId === target.teamId)
     .map((a) => ({ name: a.name, mission: a.mission }));
 
   const appendPrompt = buildSystemPromptAppend(target.name, target.mission, target.teamId, othersForTarget, target.canCreateAgents ?? false);
@@ -353,14 +346,7 @@ export async function runAgentTask(
 
   const otherAgents = agentService
     .getAllAgents()
-    .filter((a) => {
-      if (a.id === agentId || a.teamId !== agent.teamId) return false;
-      if (agent.role === 'leader') {
-        return a.role === 'leader' || a.officeId === agent.officeId;
-      }
-      return a.officeId === agent.officeId;
-    })
-    .filter((a, i, arr) => arr.findIndex((b) => b.id === a.id) === i)
+    .filter((a) => a.id !== agentId && a.teamId === agent.teamId)
     .map((a) => ({ name: a.name, mission: a.mission }));
 
   const appendPrompt = buildSystemPromptAppend(agent.name, agent.mission, agent.teamId, otherAgents, agent.canCreateAgents ?? false);
