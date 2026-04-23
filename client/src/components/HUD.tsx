@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAgentStore } from '../store/agentStore';
 import { requestDesktopNotifications } from '../store/socketStore';
+import { GRID_CAPACITY } from '../constants';
 
 interface Props {
   onAddAgent: () => void;
@@ -18,8 +19,7 @@ export function HUD({ onAddAgent, onOpenTemplates, onOpenSync, connected, readOn
     (acc, a) => { acc[a.status] = (acc[a.status] ?? 0) + 1; return acc; },
     {} as Record<string, number>,
   );
-  const ROOMS_PER_TEAM = 10;
-  const full = teamAgentCount >= ROOMS_PER_TEAM;
+  const full = teamAgentCount >= GRID_CAPACITY;
   const [notifPerm, setNotifPerm] = useState<NotificationPermission>('default');
   const [title, setTitle] = useState(() => localStorage.getItem('app-title') ?? 'Tonkatsu');
   const [editingTitle, setEditingTitle] = useState(false);
@@ -106,7 +106,7 @@ export function HUD({ onAddAgent, onOpenTemplates, onOpenSync, connected, readOn
             className="btn btn-primary"
             onClick={onAddAgent}
             disabled={full}
-            title={full ? `All ${ROOMS_PER_TEAM} offices occupied` : 'Create a new agent'}
+            title={full ? `All ${GRID_CAPACITY} offices occupied` : 'Create a new agent'}
           >
             + Add Agent
           </button>

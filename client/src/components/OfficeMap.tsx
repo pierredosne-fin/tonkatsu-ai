@@ -3,9 +3,8 @@ import { useAgentStore } from '../store/agentStore';
 import { useSocketStore } from '../store/socketStore';
 import { Room } from './Room';
 import type { Agent, Room as RoomType } from '../types';
+import { GRID_COLS, GRID_ROWS } from '../constants';
 
-const GRID_COLS = 5;
-const GRID_ROWS = 3;
 const ROOMS: RoomType[] = Array.from({ length: GRID_COLS * GRID_ROWS }, (_, i) => ({
   id: `room-${String(i + 1).padStart(2, '0')}`,
   agentId: null,
