@@ -362,7 +362,8 @@ html, body, #root {
 
 .room--vacant {
   border-style: dashed;
-  opacity: 0.5;
+  border-color: color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
 }
 
 .room--working {
