@@ -309,8 +309,6 @@ html, body, #root {
 
 .room--vacant {
   border-style: dashed;
-  border-color: color-mix(in srgb, var(--border) 70%, transparent);
-  background: color-mix(in srgb, var(--surface) 60%, transparent);
 }
 
 .room--working {
