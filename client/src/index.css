@@ -281,12 +281,12 @@ html, body, #root {
 
 .office-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(5, 160px);
   grid-template-rows: repeat(3, 160px);
   /* min-height pins the board at full capacity even when rows are all-vacant */
   min-height: calc(3 * 160px + 2 * 14px);
   gap: 14px;
-  width: min(900px, 100%);
+  width: fit-content;
   position: relative;
 }
 
