@@ -1,7 +1,2 @@
+.DS_Store
 node_modules/
-dist/
-.env
-*.local
-.sync-data/
-repos/
-workspaces/
