@@ -1,0 +1,11 @@
+{
+  "name": "my-team-plugins",
+  "owner": {
+    "name": "Pierre Dosne"
+  },
+  "metadata": {
+    "description": "Custom plugins for our team's Claude Code workflows",
+    "pluginRoot": "./plugins"
+  },
+  "plugins": []
+}
